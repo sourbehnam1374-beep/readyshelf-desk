@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import fsSync from "node:fs";
 import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
 import { TRUST_VERSION, resolvePublishText, isLocked, freezePost, SUCCESS_CRITERIA } from "./lib/trust.js";
-import { openStore } from "./lib/db.js";
+import { POSITIONING } from "./lib/copy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
@@ -327,7 +327,7 @@ async function sendStart(chatId) {
   const bot = getBot();
   await bot.sendMessage(
     chatId,
-    "ReadyShelf Desk\n\nForward a source → get a clean draft → Approve freezes exact text → it posts to the channel.\n\nNot “AI in your voice.” One channel. One approver.",
+    `${POSITIONING.name}\n\n${POSITIONING.line}\n\n${POSITIONING.is} ${POSITIONING.isNot}`,
     strangerKeyboard(),
   );
 }

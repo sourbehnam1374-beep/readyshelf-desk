@@ -7,6 +7,12 @@ Telegram Mini App for one-channel approval.
 Live: https://desk-production-537d.up.railway.app  
 Bot: [@ReadyShelfShopBot](https://t.me/ReadyShelfShopBot) · Channel: [@readyshelf](https://t.me/readyshelf)
 
+## Positioning
+
+Forward a source → get a clean draft → Approve freezes exact text → it posts to the channel.
+
+An approval inbox with an assisted draft. Not “AI in your voice.” Not a fact-checker. Not auto-post. One operator. One channel. desk30 · ⭐500 / 30 days.
+
 ## Draft Engine v1
 
 Not “AI in your voice.” A short English channel post from the source:
