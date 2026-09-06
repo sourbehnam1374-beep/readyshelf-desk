@@ -536,7 +536,7 @@ footer{
     <section class="panel" id="panel-review" role="tabpanel" aria-labelledby="tab-review" hidden>
       <div class="page-hd">
         <h1>Review</h1>
-        <p>Left is the source. Right is the draft. Approve freezes <strong>exact</strong> draft text, then publishes LIVE.</p>
+        <p>Edit the draft. Approve freezes exact text and posts live to @readyshelf with a link.</p>
       </div>
 
       <div class="review-split">
@@ -652,8 +652,7 @@ One quiet hour beats five panicked evenings.</div>
             <li>Generate (or ingest) → a Post with status ready, source_id, draft_text, model, prompt_version. Draft opens in Review automatically, or in one tap.</li>
             <li>Inbox shows sources and Draft ready.</li>
             <li>Review is Source | Draft. No Verified badge.</li>
-            <li>Approve freezes the exact draft_text. Frozen posts cannot be edited.</li>
-            <li>Publish sends frozen_text only. Nothing live without Approve.</li>
+            <li>Operator edits → Approve → live post on @readyshelf with a t.me link.</li>
             <li>Provider: XAI_API_KEY, else OPENAI_API_KEY, else deterministic cleaner. Temperature 0.</li>
             <li>initData HMAC on every Mini App mutation. Bot ingest uses INGEST_KEY.</li>
             <li>SQLite on the Railway volume (/app/data). JSON imported once.</li>
@@ -1623,8 +1622,8 @@ One quiet hour beats five panicked evenings.</div>
     document.getElementById("rev-version-foot").textContent =
       (review.version || "draft-engine/v1") + (review.frozen ? " · frozen" : " · freezes on approve");
     document.getElementById("btn-approve").textContent = review.frozen
-      ? "Already queued"
-      : "Approve & queue · " + review.channel + " · 10:30";
+      ? "Already live"
+      : "Approve → live on @readyshelf";
     var editEl = document.getElementById("rev-edit");
     editEl.classList.toggle("show", editing);
     if (editing) editEl.value = review.preview;
@@ -1715,7 +1714,7 @@ One quiet hour beats five panicked evenings.</div>
 
   document.getElementById("btn-approve").addEventListener("click", function () {
     if (review.frozen) {
-      toast("<strong>Frozen</strong> · already queued");
+      toast("<strong>LIVE</strong> · already on @readyshelf");
       return;
     }
     if (editing) {
@@ -1740,15 +1739,22 @@ One quiet hour beats five panicked evenings.</div>
     btn.disabled = true;
     btn.textContent = "Publishing LIVE…";
 
-    apiPost("/api/approve-queue", {
-      text: frozenText,
-      frozenText: frozenText,
-      scheduledAt: scheduledAt,
-      time: scheduledAt,
-      status: "approved",
-      source: review.sourceId || null,
-      postId: review.postId || null
-    })
+    var persist = review.postId
+      ? apiPatch("/api/posts/" + review.postId, { draft_text: frozenText }).catch(function () { return null; })
+      : Promise.resolve();
+
+    persist
+      .then(function () {
+        return apiPost("/api/approve-queue", {
+          text: frozenText,
+          frozenText: frozenText,
+          scheduledAt: scheduledAt,
+          time: scheduledAt,
+          status: "approved",
+          source: review.sourceId || null,
+          postId: review.postId || null
+        });
+      })
       .then(function () {
         return apiPost("/api/publish", {
           text: frozenText,
@@ -1760,26 +1766,26 @@ One quiet hour beats five panicked evenings.</div>
         review.frozen = true;
         saveJSON(LS_REVIEW, review);
 
-        /* Remove from inbox review list once approved */
         if (review.sourceId) {
           inbox = inbox.filter(function (s) { return s.id !== review.sourceId; });
           saveJSON(LS_INBOX, inbox);
         }
 
-        var link = pubRes && pubRes.link ? pubRes.link : null;
+        var messageId = pubRes && pubRes.message_id ? pubRes.message_id : null;
+        var link = (pubRes && pubRes.link) || (messageId ? ("https://t.me/readyshelf/" + messageId) : null);
         var item = {
           id: "pub" + Date.now(),
           section: "sent",
           title: frozenText.split(/\n/)[0].slice(0, 56),
           snippet: frozenText.replace(/\n+/g, " ").slice(0, 160),
           when: new Date().toISOString(),
-          channel: review.channel,
+          channel: "@readyshelf",
           status: "LIVE",
           version: review.version,
-          delivery: "LIVE to Telegram",
+          delivery: "LIVE on @readyshelf",
           live: true,
           link: link,
-          messageId: pubRes && pubRes.message_id ? pubRes.message_id : null,
+          messageId: messageId,
           frozenText: frozenText,
           postId: review.postId || null
         };
@@ -1791,15 +1797,14 @@ One quiet hour beats five panicked evenings.</div>
         var linkHtml = link
           ? ' · <a href="' + escapeHtml(link) + '" target="_blank" rel="noopener">' + escapeHtml(link) + "</a>"
           : "";
-        reward("<strong>LIVE to Telegram</strong>" + linkHtml);
+        reward("<strong>LIVE on @readyshelf</strong>" + linkHtml);
         setTimeout(function () { switchTab("queue"); }, reduceMotion ? 0 : 380);
       })
       .catch(function (err) {
-        /* Do not freeze or claim published on failure */
         review.frozen = false;
         saveJSON(LS_REVIEW, review);
         btn.disabled = false;
-        btn.textContent = prevLabel || ("Approve & queue · " + review.channel + " · 10:30");
+        btn.textContent = prevLabel || "Approve → live on @readyshelf";
         renderReview();
         toast("<strong>Publish failed</strong> · " + escapeHtml((err && err.message) || "error"));
       });

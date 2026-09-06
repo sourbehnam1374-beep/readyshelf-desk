@@ -96,8 +96,7 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 2. Generate (or ingest) → a Post with status ready, `source_id`, `draft_text`, `model`, `prompt_version`. Draft opens in Review automatically, or in one tap.
 3. Inbox shows sources and Draft ready.
 4. Review is Source | Draft. No Verified badge.
-5. Approve freezes the exact `draft_text`. Frozen posts cannot be edited.
-6. Publish sends `frozen_text` only. Nothing live without Approve.
+5. Operator edits → Approve → live post on `@readyshelf` with a t.me link.
 7. Provider: `XAI_API_KEY`, else `OPENAI_API_KEY`, else deterministic cleaner. Temperature 0.
 8. initData HMAC on every Mini App mutation. Bot ingest uses `INGEST_KEY`.
 9. SQLite on the Railway volume (`/app/data`). JSON imported once.

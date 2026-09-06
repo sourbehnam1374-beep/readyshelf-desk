@@ -443,7 +443,9 @@ app.post("/api/publish", requireTelegramAuth, async (req, res) => {
     });
 
     const message_id = msg?.message_id;
-    const link = channelMessageLink(CHANNEL_ID, message_id);
+    const link =
+      channelMessageLink(CHANNEL_ID, message_id) ||
+      (message_id ? `https://t.me/readyshelf/${message_id}` : null);
     const now = new Date().toISOString();
     await writePosts(
       posts.map((p) =>
