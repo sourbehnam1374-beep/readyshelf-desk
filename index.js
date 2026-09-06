@@ -26,7 +26,8 @@ dotenv.config({ path: path.join(__dirname, ".env"), override: true });
 if (!process.env.BOT_TOKEN && priorToken) process.env.BOT_TOKEN = priorToken;
 
 const PORT = Number(process.env.PORT) || 8787;
-const CHANNEL_ID = process.env.CHANNEL_ID || "@readyshelf";
+const STARS_SKU = "desk30";
+const STARS_AMOUNT = 500;
 const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
@@ -287,32 +288,129 @@ async function handleBotCommand(msg) {
   const text = String(msg.text || "").trim();
   const chatId = msg.chat?.id;
   if (!chatId) return;
-  const bot = getBot();
-  const deskBtn = {
-    reply_markup: {
-      inline_keyboard: [[{ text: "Open Desk", web_app: { url: WEBAPP_URL } }]],
-    },
-  };
   const cmd = text.split(/\s+/)[0].split("@")[0].toLowerCase();
-  if (cmd === "/start" || cmd === "/desk" || /^desk$/i.test(text)) {
-    await bot.sendMessage(chatId, "ReadyShelf Desk — forward a source here, then Approve in Desk.", deskBtn);
+  if (cmd === "/start" || /^start$/i.test(text)) {
+    await sendStart(chatId);
+    return;
+  }
+  if (cmd === "/desk" || /^desk$/i.test(text)) {
+    await sendDeskLink(chatId);
     return;
   }
   if (cmd === "/help" || cmd === "/how" || /^how$/i.test(text) || /^help$/i.test(text)) {
-    await bot.sendMessage(
-      chatId,
-      "Forward a message to this bot → it appears in Desk Inbox.\nGenerate a draft → Approve freezes exact text → it posts to @readyshelf.",
-      deskBtn,
-    );
+    await sendHow(chatId);
     return;
   }
-  if (cmd === "/plan" || /^plan$/i.test(text)) {
-    await bot.sendMessage(chatId, "Plan is desk30 — ⭐ 500 / 30 days on @ReadyShelfShopBot. Existing Stars SKU.", deskBtn);
+  if (cmd === "/plan" || /^plan$/i.test(text) || cmd === "/buy") {
+    await sendBuyDesk(chatId);
     return;
   }
   if (cmd === "/demo" || /^demo$/i.test(text)) {
-    await bot.sendMessage(chatId, "Forward any tip or note to this bot, then open Desk to see it in Inbox.", deskBtn);
+    await sendDemo(chatId);
   }
+}
+
+function strangerKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "Demo", callback_data: "demo" },
+          { text: "Buy Desk · ⭐500", callback_data: "buy_desk" },
+        ],
+      ],
+    },
+  };
+}
+
+async function sendStart(chatId) {
+  const bot = getBot();
+  await bot.sendMessage(
+    chatId,
+    "ReadyShelf Desk\n\nForward a source → get a clean draft → Approve freezes exact text → it posts to the channel.\n\nNot “AI in your voice.” One channel. One approver.",
+    strangerKeyboard(),
+  );
+}
+
+async function sendDemo(chatId) {
+  const bot = getBot();
+  await bot.sendMessage(
+    chatId,
+    "Demo (60 seconds)\n\n1. Forward a message to this bot.\n2. Desk writes a short English draft — facts from the source only.\n3. You edit if needed. Approve freezes that exact text.\n4. It posts live to the channel with a t.me link.\n\nNothing publishes without Approve.\n\nDesk is ⭐500 / 30 days (desk30).",
+    strangerKeyboard(),
+  );
+}
+
+async function sendHow(chatId) {
+  const bot = getBot();
+  await bot.sendMessage(
+    chatId,
+    "How: Forward → draft → Approve → live.\nStars SKU is desk30 (⭐500 / 30 days). Not a new billing system.",
+    strangerKeyboard(),
+  );
+}
+
+async function sendDeskLink(chatId) {
+  const bot = getBot();
+  await bot.sendMessage(chatId, "Open Desk to review drafts.", {
+    reply_markup: {
+      inline_keyboard: [[{ text: "Open Desk", web_app: { url: WEBAPP_URL } }]],
+    },
+  });
+}
+
+async function sendBuyDesk(chatId) {
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendInvoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      title: "ReadyShelf Desk",
+      description: "Approval inbox + Draft Engine for one channel. 30 days. SKU desk30.",
+      payload: STARS_SKU,
+      currency: "XTR",
+      prices: [{ label: "Desk · 30 days", amount: STARS_AMOUNT }],
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!data.ok) {
+    const err = new Error(data.description || "sendInvoice failed");
+    throw err;
+  }
+}
+
+async function handleCallbackQuery(cq) {
+  const chatId = cq.message?.chat?.id;
+  const data = String(cq.data || "");
+  const bot = getBot();
+  await bot.answerCallbackQuery(cq.id).catch(() => {});
+  if (!chatId) return;
+  if (data === "demo") return sendDemo(chatId);
+  if (data === "buy_desk") return sendBuyDesk(chatId);
+  if (data === "start") return sendStart(chatId);
+}
+
+async function handlePreCheckout(query) {
+  const bot = getBot();
+  const ok = query?.currency === "XTR" && query?.invoice_payload === STARS_SKU;
+  await bot.answerPreCheckoutQuery(query.id, ok, ok ? undefined : "Unknown SKU");
+}
+
+async function handleSuccessfulPayment(msg) {
+  const pay = msg.successful_payment;
+  if (!pay || pay.invoice_payload !== STARS_SKU) return;
+  const chatId = msg.chat?.id;
+  if (!chatId) return;
+  const bot = getBot();
+  await bot.sendMessage(
+    chatId,
+    "Desk unlocked for 30 days (desk30). Forward a source, then Approve in Desk.",
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: "Open Desk", web_app: { url: WEBAPP_URL } }]],
+      },
+    },
+  );
 }
 
 async function upsertDraftForSource(source, generated) {
@@ -415,7 +513,7 @@ app.get("/api/health", (_req, res) => {
     },
     persist: { driver: "sqlite", volume: DATA_DIR },
     success: SUCCESS_CRITERIA,
-    bot: { webhook: "/api/telegram/webhook" },
+    bot: { webhook: "/api/telegram/webhook", stars: { sku: STARS_SKU, amount: STARS_AMOUNT } },
   });
 });
 
@@ -529,11 +627,33 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
 app.post("/api/telegram/webhook", requireTelegramWebhook, async (req, res) => {
   try {
     const update = req.body || {};
+
+    if (update.pre_checkout_query) {
+      handlePreCheckout(update.pre_checkout_query).catch((err) => {
+        console.error("pre-checkout failed", err && err.message);
+      });
+      return res.json({ ok: true });
+    }
+
+    if (update.callback_query) {
+      handleCallbackQuery(update.callback_query).catch((err) => {
+        console.error("callback failed", err && err.message);
+      });
+      return res.json({ ok: true });
+    }
+
     const msg = update.message || update.edited_message || update.channel_post;
     if (!msg) return res.json({ ok: true });
 
+    if (msg.successful_payment) {
+      handleSuccessfulPayment(msg).catch((err) => {
+        console.error("payment ack failed", err && err.message);
+      });
+      return res.json({ ok: true });
+    }
+
     const text = String(msg.text || "").trim();
-    if (text.startsWith("/") || /^(desk|demo|how|plan|help)$/i.test(text)) {
+    if (text.startsWith("/") || /^(desk|demo|how|plan|help|buy)$/i.test(text)) {
       handleBotCommand(msg).catch((err) => {
         console.error("bot command failed", err && err.message);
       });
@@ -705,6 +825,15 @@ app.listen(PORT, "0.0.0.0", () => {
       .setWebHook(hook, { secret_token: webhookSecret() })
       .then(() => console.log("Telegram webhook registered"))
       .catch((err) => console.error("webhook register failed", err && err.message));
+    getBot()
+      .setMyCommands([
+        { command: "start", description: "Demo and buy Desk" },
+        { command: "demo", description: "See how Desk works" },
+        { command: "plan", description: "Buy Desk · ⭐500" },
+        { command: "desk", description: "Open Desk" },
+        { command: "help", description: "How it works" },
+      ])
+      .catch(() => {});
   }
 });
 
