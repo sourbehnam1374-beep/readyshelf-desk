@@ -327,7 +327,7 @@ async function sendStart(chatId) {
   const bot = getBot();
   await bot.sendMessage(
     chatId,
-    `${POSITIONING.name}\n\n${POSITIONING.line}\n\n${POSITIONING.is} ${POSITIONING.isNot}`,
+    `${POSITIONING.name}\n\n${POSITIONING.yes}\n\n${POSITIONING.line}\n\n${POSITIONING.is} ${POSITIONING.isNot}`,
     strangerKeyboard(),
   );
 }
