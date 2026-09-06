@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>ReadyShelf · Approval Inbox</title>
+<style>
+:root{
+  --bg:#070b14;
+  --bg-mid:#0c1220;
+  --panel:rgba(18,24,38,.72);
+  --panel-solid:#121826;
+  --line:rgba(148,163,184,.14);
+  --line-soft:rgba(148,163,184,.08);
+  --ink:#e8eef8;
+  --dim:#8b97b0;
+  --faint:#5c6780;
+  --cyan:#7dd3fc;
+  --cyan-ink:#03222a;
+  --cyan-glow:rgba(125,211,252,.28);
+  --violet-glow:rgba(139,92,246,.18);
+  --warn:#fb923c;
+  --rose:#fb7185;
+  --green:#7ee2a0;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --radius:16px;
+  --maxw:430px;
+  --shadow:0 8px 28px rgba(0,0,0,.28);
+  --inset-top:inset 0 1px 0 rgba(255,255,255,.06);
+  --tab-ms:200ms;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;min-height:100dvh;color:var(--ink);
+  font-family:var(--sans);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  background:
+    radial-gradient(ellipse 80% 50% at 15% -10%, var(--violet-glow), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 95% 8%, rgba(34,211,238,.12), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(125,211,252,.06), transparent 55%),
+    linear-gradient(165deg, #080d18 0%, #0b1220 42%, #070b14 100%);
+  background-attachment:fixed;
+}
+::selection{background:rgba(125,211,252,.22)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+
+.app{
+  max-width:var(--maxw);margin:0 auto;min-height:100dvh;
+  display:flex;flex-direction:column;
+  position:relative;
+}
+@media(min-width:460px){
+  .app{
+    border-left:1px solid var(--line-soft);
+    border-right:1px solid var(--line-soft);
+    box-shadow:0 0 0 1px rgba(255,255,255,.02), 0 24px 64px rgba(0,0,0,.35);
+  }
+}
+
+/* Topbar */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  backdrop-filter:blur(18px) saturate(1.2);
+  -webkit-backdrop-filter:blur(18px) saturate(1.2);
+  background:rgba(7,11,20,.78);
+  border-bottom:1px solid var(--line-soft);
+  padding:14px 16px 12px;
+}
+.brandrow{
+  display:flex;align-items:center;gap:8px;
+  padding-bottom:12px;
+}
+.brandrow .name{
+  margin:0;font-size:15px;font-weight:600;letter-spacing:.04em;
+}
+.mock-chip{
+  font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);border:1px solid var(--line-soft);border-radius:999px;
+  padding:2px 7px;line-height:1.4;
+  background:rgba(255,255,255,.02);
+}
+.xp-chip{
+  margin-left:auto;
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;
+  color:var(--cyan);
+  border:1px solid rgba(125,211,252,.22);
+  border-radius:999px;
+  padding:3px 9px;line-height:1.35;
+  background:rgba(125,211,252,.08);
+  transition:transform .18s var(--ease), box-shadow .18s;
+}
+.xp-chip.pulse{
+  transform:scale(1.06);
+  box-shadow:0 0 14px rgba(125,211,252,.25);
+}
+
+/* Tabs — larger tap targets */
+.tabs{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:2px;
+  padding:3px;
+  background:rgba(255,255,255,.035);
+  border:1px solid var(--line-soft);
+  border-radius:14px;
+  box-shadow:var(--inset-top);
+}
+.tab{
+  appearance:none;border:0;background:transparent;cursor:pointer;
+  font:inherit;font-size:13px;font-weight:500;color:var(--dim);
+  min-height:44px;padding:10px 4px;border-radius:11px;
+  transition:color .18s,background .18s,box-shadow .18s,transform .12s;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;
+}
+.tab:hover{color:var(--ink)}
+.tab:active{transform:scale(.97)}
+.tab[aria-selected="true"]{
+  color:var(--ink);
+  background:rgba(18,24,38,.92);
+  box-shadow:0 1px 3px rgba(0,0,0,.25), 0 0 0 1px rgba(125,211,252,.12),
+             0 0 16px rgba(125,211,252,.08);
+  font-weight:600;
+}
+.tab-hint{
+  display:none;
+  font-size:9px;font-family:var(--mono);color:var(--faint);
+  margin-top:6px;text-align:center;letter-spacing:.04em;
+}
+@media(hover:hover) and (pointer:fine){
+  .tab-hint{display:block}
+}
+
+main{
+  flex:1;padding:16px 16px 28px;
+  position:relative;
+  overflow:hidden;
+}
+.panel{
+  display:none;
+  opacity:0;
+  transform:translateX(10px);
+}
+.panel.active{
+  display:block;
+  animation:panelIn var(--tab-ms) var(--ease) forwards;
+}
+.panel.leaving{
+  display:block;
+  position:absolute;left:16px;right:16px;top:16px;
+  animation:panelOut 160ms var(--ease) forwards;
+  pointer-events:none;
+}
+@keyframes panelIn{
+  from{opacity:0;transform:translateX(12px)}
+  to{opacity:1;transform:translateX(0)}
+}
+@keyframes panelOut{
+  from{opacity:1;transform:translateX(0)}
+  to{opacity:0;transform:translateX(-8px)}
+}
+
+/* Page header */
+.page-hd{margin:0 0 18px}
+.page-hd h1{
+  margin:0;font-size:22px;font-weight:600;letter-spacing:-.035em;line-height:1.2;
+}
+.page-hd p{
+  margin:6px 0 0;font-size:13px;color:var(--dim);line-height:1.45;
+}
+
+/* Glass cards */
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:15px 15px;
+  margin-bottom:18px;
+  box-shadow:var(--shadow), var(--inset-top);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  transition:transform .15s var(--ease), box-shadow .15s, border-color .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.card.pressable:active,
+.card.is-press{
+  transform:scale(.985) translateY(-1px);
+  box-shadow:0 10px 32px rgba(0,0,0,.32), 0 0 0 1px rgba(125,211,252,.12), var(--inset-top);
+}
+.card.selected{
+  border-color:rgba(125,211,252,.35);
+  box-shadow:0 8px 28px rgba(0,0,0,.28), 0 0 0 1px rgba(125,211,252,.18), 0 0 20px rgba(125,211,252,.1);
+}
+.card.highlight-flash{
+  animation:qFlash .9s var(--ease);
+}
+@keyframes qFlash{
+  0%,100%{box-shadow:var(--shadow), var(--inset-top);border-color:var(--line)}
+  30%{box-shadow:0 8px 28px rgba(0,0,0,.28), 0 0 0 1px rgba(125,211,252,.4), 0 0 28px rgba(125,211,252,.22)}
+  30%{border-color:rgba(125,211,252,.45)}
+}
+.row{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:14px 0;border-bottom:1px solid var(--line-soft);
+}
+.row:first-child{padding-top:0}
+.row:last-child{border-bottom:0;padding-bottom:0}
+
+/* Filter chips */
+.filters{
+  display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;
+}
+.chip{
+  appearance:none;cursor:pointer;
+  font:inherit;font-size:12px;font-weight:500;color:var(--dim);
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--line);
+  border-radius:999px;padding:8px 14px;min-height:36px;
+  transition:color .15s,border-color .15s,background .15s,box-shadow .15s,transform .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.chip:hover{color:var(--ink);border-color:rgba(148,163,184,.28)}
+.chip:active{transform:scale(.97)}
+.chip[aria-pressed="true"]{
+  color:var(--cyan);
+  background:rgba(125,211,252,.1);
+  border-color:rgba(125,211,252,.35);
+  font-weight:600;
+  box-shadow:0 0 0 1px rgba(125,211,252,.08), 0 0 14px rgba(125,211,252,.1);
+}
+
+/* Inbox item */
+.item-title{margin:0;font-size:14.5px;font-weight:600;letter-spacing:-.015em;line-height:1.3}
+.item-meta{
+  margin:5px 0 0;font-size:11.5px;color:var(--faint);
+  font-family:var(--mono);letter-spacing:.01em;
+}
+.item-meta .dot{margin:0 5px;opacity:.45}
+.status{
+  display:inline-block;font-size:11px;font-weight:500;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:2px 8px;
+  vertical-align:middle;margin-left:6px;
+  background:rgba(255,255,255,.02);
+}
+.status.ready{color:var(--cyan);border-color:rgba(125,211,252,.28)}
+.status.draft{color:var(--dim)}
+.status.queued{color:var(--cyan);border-color:rgba(125,211,252,.28)}
+.status.sent{color:var(--green);border-color:rgba(126,226,160,.28)}
+.status.live{color:#86efac;border-color:rgba(134,239,172,.45);background:rgba(34,197,94,.12)}
+.q-meta a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(125,211,252,.35)}
+.q-meta a:hover{border-bottom-color:var(--cyan)}
+.mock-chip.live-hint{color:var(--green);border-color:rgba(126,226,160,.28)}
+.status.paused{color:var(--warn);border-color:rgba(251,146,60,.28)}
+
+/* Buttons */
+.btn{
+  appearance:none;cursor:pointer;font:inherit;font-size:13px;font-weight:500;
+  padding:10px 16px;min-height:40px;border-radius:999px;border:1px solid var(--line);
+  background:rgba(255,255,255,.03);color:var(--ink);
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  transition:background .15s,border-color .15s,opacity .15s,box-shadow .15s,transform .12s,filter .12s;
+  position:relative;overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn:hover{border-color:rgba(148,163,184,.3)}
+.btn:active{transform:scale(.97)}
+.btn.ripple-flash::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(circle at var(--rx,50%) var(--ry,50%), rgba(255,255,255,.28), transparent 55%);
+  animation:rippleFlash .45s ease-out forwards;pointer-events:none;
+}
+@keyframes rippleFlash{
+  from{opacity:.7}
+  to{opacity:0}
+}
+.btn.primary{
+  background:linear-gradient(180deg, #93dffd 0%, var(--cyan) 100%);
+  border-color:transparent;color:var(--cyan-ink);font-weight:600;
+  box-shadow:0 0 0 1px rgba(125,211,252,.25), 0 4px 16px var(--cyan-glow),
+             inset 0 1px 0 rgba(255,255,255,.35);
+}
+.btn.primary:hover{
+  filter:brightness(1.04);
+  box-shadow:0 0 0 1px rgba(125,211,252,.35), 0 6px 22px rgba(125,211,252,.38),
+             inset 0 1px 0 rgba(255,255,255,.4);
+}
+.btn.primary:active{
+  transform:scale(.97);
+  filter:brightness(.97);
+}
+.btn.ghost{border-color:transparent;color:var(--dim);padding-left:10px;padding-right:10px;background:transparent}
+.btn.ghost:hover{color:var(--ink);border-color:transparent;background:rgba(148,163,184,.08)}
+.btn.danger{color:var(--rose);border-color:rgba(251,113,133,.25)}
+.btn.block{width:100%}
+.btn[disabled],.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+.item-actions{margin-top:14px}
+
+.empty{
+  padding:36px 16px;text-align:center;color:var(--faint);font-size:13px;
+  border:1px dashed var(--line-soft);border-radius:var(--radius);
+  background:rgba(255,255,255,.015);
+}
+.empty strong{display:block;color:var(--dim);font-weight:560;margin-bottom:6px;font-size:14px}
+.empty .btn{margin-top:14px}
+
+/* Review */
+.section-label{
+  font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 8px;
+}
+.quote{
+  margin:0;padding:10px 12px;border-radius:12px;
+  background:rgba(7,11,20,.4);border-left:2px solid rgba(125,211,252,.35);
+  color:var(--dim);font-size:13px;line-height:1.5;
+}
+.draft-bubble{
+  margin:0;
+  padding:14px 15px 13px;
+  border-radius:14px 14px 14px 4px;
+  background:linear-gradient(165deg, rgba(28,36,54,.95) 0%, rgba(18,26,42,.98) 100%);
+  border:1px solid rgba(148,163,184,.12);
+  box-shadow:0 2px 12px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.05);
+  position:relative;
+}
+.draft-bubble::before{
+  content:"";
+  position:absolute;left:0;top:10px;bottom:10px;width:2px;
+  border-radius:2px;
+  background:linear-gradient(180deg, rgba(125,211,252,.55), rgba(139,92,246,.25));
+  opacity:.7;
+}
+.draft-body{
+  margin:0;padding-left:8px;white-space:pre-wrap;font-size:14px;line-height:1.58;color:var(--ink);
+}
+.draft-foot{margin:10px 0 0;font-size:11px;color:var(--faint);font-family:var(--mono);letter-spacing:.02em}
+.warn-compact{
+  margin:10px 0 0;font-size:12px;color:var(--dim);line-height:1.45;
+}
+.warn-compact span{color:var(--warn);margin-right:4px}
+.slot-line{
+  margin-top:12px;font-size:12.5px;color:var(--dim);
+}
+.slot-line strong{color:var(--ink);font-weight:600}
+.edit-area{
+  width:100%;min-height:110px;resize:vertical;display:none;margin-top:10px;
+  background:rgba(7,11,20,.55);color:var(--ink);border:1px solid var(--line);
+  border-radius:12px;padding:11px 12px;font:inherit;line-height:1.5;outline:none;
+}
+.edit-area:focus{border-color:rgba(125,211,252,.4);box-shadow:0 0 0 3px rgba(125,211,252,.08)}
+.edit-area.show{display:block}
+
+/* Queue */
+.q-row{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:13px 4px 13px 0;
+  border-bottom:1px solid var(--line-soft);
+  position:relative;
+  padding-left:12px;
+  border-radius:10px;
+  transition:background .25s, box-shadow .25s;
+}
+.q-row::before{
+  content:"";
+  position:absolute;left:0;top:12px;bottom:12px;width:2.5px;
+  border-radius:2px;
+  background:rgba(148,163,184,.25);
+}
+.q-row.upcoming::before{
+  background:linear-gradient(180deg, var(--cyan), rgba(125,211,252,.35));
+  box-shadow:0 0 8px rgba(125,211,252,.25);
+}
+.q-row.sent::before{
+  background:linear-gradient(180deg, var(--green), rgba(126,226,160,.3));
+}
+.q-row.paused::before{
+  background:linear-gradient(180deg, var(--warn), rgba(251,146,60,.3));
+}
+.q-row:first-child{padding-top:2px}
+.q-row:last-child{border-bottom:0;padding-bottom:4px}
+.q-row.flash{
+  background:rgba(125,211,252,.08);
+  box-shadow:0 0 0 1px rgba(125,211,252,.2);
+  animation:rowFlash .85s var(--ease);
+}
+@keyframes rowFlash{
+  0%{background:rgba(125,211,252,.16)}
+  100%{background:transparent}
+}
+.q-title{margin:0;font-size:14px;font-weight:600;line-height:1.3}
+.q-meta{margin:4px 0 0;font-size:11.5px;color:var(--faint);font-family:var(--mono)}
+.q-actions{display:flex;gap:4px;flex-shrink:0;margin-top:2px}
+.pause-row{
+  margin-top:20px;padding-top:14px;border-top:1px solid var(--line-soft);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.pause-row .hint{font-size:12px;color:var(--faint)}
+
+/* Settings */
+.block{margin-bottom:22px}
+.block-title{
+  font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 10px;
+}
+.kv .label{font-size:14px;font-weight:500}
+.kv .desc{font-size:12px;color:var(--dim);margin-top:2px}
+.kv .val{font-size:12.5px;color:var(--dim);text-align:right;flex-shrink:0}
+.handle{font-size:12.5px;color:var(--dim);margin-top:2px}
+.plan-card{
+  background:
+    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(125,211,252,.1), transparent 55%),
+    var(--panel);
+  border:1px solid rgba(125,211,252,.18);
+}
+.plan-line{
+  font-size:22px;font-weight:650;margin:0 0 2px;letter-spacing:-.03em;
+  display:flex;align-items:baseline;gap:6px;
+}
+.plan-line span{font-weight:500;color:var(--dim);font-size:13px;letter-spacing:0}
+.plan-desc{margin:0 0 14px;font-size:13px;color:var(--dim);line-height:1.45}
+.later{margin:0;font-size:12px;color:var(--faint)}
+
+footer{
+  padding:16px;text-align:center;
+  font-size:11.5px;color:var(--faint);
+  border-top:1px solid var(--line-soft);
+}
+
+/* Toast / snackbar */
+.toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(12px) scale(.98);
+  max-width:min(340px,calc(100vw - 28px));z-index:70;
+  background:rgba(18,24,38,.95);border:1px solid var(--line);border-radius:14px;
+  padding:11px 14px;font-size:13px;color:var(--dim);
+  box-shadow:0 12px 36px rgba(0,0,0,.45), var(--inset-top);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  opacity:0;pointer-events:none;
+  transition:opacity .2s var(--ease),transform .22s var(--ease);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.toast.reward{border-color:rgba(125,211,252,.28);box-shadow:0 12px 36px rgba(0,0,0,.45), 0 0 20px rgba(125,211,252,.12)}
+.toast strong{color:var(--ink);font-weight:600}
+
+/* Confetti-lite */
+#confetti-layer{
+  position:fixed;inset:0;pointer-events:none;z-index:80;overflow:hidden;
+}
+.confetti-bit{
+  position:absolute;width:5px;height:5px;border-radius:1.5px;
+  opacity:.9;
+  animation:confettiFall .6s ease-out forwards;
+}
+@keyframes confettiFall{
+  0%{transform:translate(0,0) rotate(0deg) scale(1);opacity:1}
+  100%{transform:translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(.4);opacity:0}
+}
+
+/* Preparing shimmer on card */
+.card.preparing{opacity:.7;pointer-events:none}
+.card.preparing .btn.primary{opacity:.65}
+
+@media (prefers-reduced-motion: reduce){
+  :root{--tab-ms:1ms}
+  .panel.active,.panel.leaving{animation:none!important;opacity:1;transform:none}
+  .panel.leaving{display:none}
+  .toast{transition:opacity .01s}
+  .btn,.chip,.tab,.card,.xp-chip{transition:none!important}
+  .btn:active,.tab:active,.chip:active{transform:none}
+  .card.pressable:active,.card.is-press{transform:none}
+  .confetti-bit,.card.highlight-flash,.q-row.flash,.btn.ripple-flash::after{animation:none!important;display:none}
+  .xp-chip.pulse{transform:none;box-shadow:none}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brandrow">
+      <p class="name">ReadyShelf</p>
+      <span class="mock-chip live-hint" title="UI is mock; Approve publishes LIVE to Telegram via local server">Mock · LIVE publish</span>
+      <span class="xp-chip" id="xp-chip" title="Local demo actions">Desk · 0 actions</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="ReadyShelf sections">
+      <button type="button" class="tab" role="tab" id="tab-inbox" aria-controls="panel-inbox" aria-selected="true" data-tab="inbox" tabindex="0">Inbox</button>
+      <button type="button" class="tab" role="tab" id="tab-review" aria-controls="panel-review" aria-selected="false" data-tab="review" tabindex="-1">Review</button>
+      <button type="button" class="tab" role="tab" id="tab-queue" aria-controls="panel-queue" aria-selected="false" data-tab="queue" tabindex="-1">Queue</button>
+      <button type="button" class="tab" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" data-tab="settings" tabindex="-1">Settings</button>
+    </nav>
+    <p class="tab-hint">Keys 1–4 switch tabs</p>
+  </header>
+
+  <main id="main">
+    <!-- INBOX -->
+    <section class="panel active" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
+      <div class="page-hd">
+        <h1>Inbox</h1>
+        <p>Sources ready for your approval.</p>
+      </div>
+      <div class="filters" role="group" aria-label="Filter sources">
+        <button type="button" class="chip" data-filter="new" aria-pressed="true">New</button>
+        <button type="button" class="chip" data-filter="drafting" aria-pressed="false">Draft</button>
+        <button type="button" class="chip" data-filter="ready" aria-pressed="false">Review</button>
+      </div>
+      <div id="list-inbox"></div>
+    </section>
+
+    <!-- REVIEW -->
+    <section class="panel" id="panel-review" role="tabpanel" aria-labelledby="tab-review" hidden>
+      <div class="page-hd">
+        <h1>Review</h1>
+        <p>Approve freezes this version, queues it, then publishes <strong>LIVE</strong> to Telegram.</p>
+      </div>
+
+      <div class="card" id="rev-source-card">
+        <div class="section-label">Source</div>
+        <h2 class="item-title" id="rev-source-title" style="font-size:14.5px">Forwarded tip · Batching posts</h2>
+        <p class="item-meta"><span id="rev-source-from">from @readyshelf</span><span class="dot">·</span><span id="rev-source-when">Fri, 5 Sep 2026</span></p>
+        <blockquote class="quote" id="rev-source-body" style="margin-top:10px">“Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.”</blockquote>
+      </div>
+
+      <div class="card" id="rev-draft-card">
+        <div class="section-label">Draft · @readyshelf</div>
+        <div class="draft-bubble">
+          <div class="draft-body" id="rev-preview-body">Tip: Batch your channel posts
+
+Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.
+
+One quiet hour beats five panicked evenings.</div>
+        </div>
+        <textarea class="edit-area" id="rev-edit" maxlength="2000" aria-label="Edit post draft"></textarea>
+        <p class="draft-foot" id="rev-version-foot">v1 · freezes on approve</p>
+        <p class="warn-compact" id="rev-warnings"><span>!</span> Link preview may expand · text-only (OK)</p>
+        <p class="slot-line"><strong id="rev-when">Sun, 7 Sep 2026 · 10:30</strong> · Asia/Tehran</p>
+
+        <div class="btn-row" style="margin-top:14px">
+          <button type="button" class="btn primary block" id="btn-approve">Approve &amp; queue</button>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="btn-edit">Edit</button>
+          <button type="button" class="btn ghost" id="btn-shorter">Shorter</button>
+          <button type="button" class="btn ghost" id="btn-reject" style="color:var(--rose)">Reject</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUEUE -->
+    <section class="panel" id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" hidden>
+      <div class="page-hd">
+        <h1>Queue</h1>
+        <p>Scheduled for @readyshelf · Asia/Tehran</p>
+      </div>
+
+      <div class="block">
+        <div class="block-title">Upcoming</div>
+        <div class="card" id="list-upcoming" style="padding:14px 14px 4px"></div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">Sent</div>
+        <div class="card" id="list-sent" style="padding:14px 14px 4px"></div>
+      </div>
+
+      <div class="pause-row">
+        <span class="hint" id="pause-hint">Publishing on schedule</span>
+        <button type="button" class="btn ghost" id="btn-pause">Pause</button>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <div class="page-hd">
+        <h1>Settings</h1>
+        <p>One channel · one approver</p>
+      </div>
+
+      <div class="block">
+        <div class="block-title">Channel</div>
+        <div class="card">
+          <div class="row">
+            <div>
+              <div class="label" style="font-size:14.5px;font-weight:600">ReadyShelf</div>
+              <div class="handle">@readyshelf · connected</div>
+            </div>
+          </div>
+          <div class="row kv">
+            <div>
+              <div class="label">Permissions</div>
+              <div class="desc">Post · edit own · delete own</div>
+            </div>
+            <div class="val">OK</div>
+          </div>
+          <div class="row kv">
+            <div>
+              <div class="label">Timezone</div>
+              <div class="desc">Schedule times</div>
+            </div>
+            <div class="val">Asia/Tehran</div>
+          </div>
+          <div class="row kv">
+            <div>
+              <div class="label">Approver</div>
+              <div class="desc">Single human for this desk</div>
+            </div>
+            <div class="val">You</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">House style</div>
+        <div class="card">
+          <p style="margin:0;font-size:13px;color:var(--dim);line-height:1.5">
+            Short tips, one idea per post, dry tone. Rules land in the Mini App later.
+          </p>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">Plan</div>
+        <div class="card plan-card">
+          <p class="plan-line">⭐ 500 <span>/ 30 days</span></p>
+          <p class="plan-desc">Approval inbox + queue for one channel.</p>
+          <div class="btn-row" style="margin:0">
+            <button type="button" class="btn primary" id="btn-try-free">Try free</button>
+            <button type="button" class="btn ghost" id="btn-keep-desk">Keep desk</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">Desk</div>
+        <div class="card">
+          <div class="row kv">
+            <div>
+              <div class="label">Support</div>
+              <div class="desc">@ReadyShelfShopBot</div>
+            </div>
+            <button type="button" class="btn ghost" id="btn-support">Open</button>
+          </div>
+          <div class="row kv">
+            <div>
+              <div class="label">Export</div>
+              <div class="desc">Approved posts (JSON)</div>
+            </div>
+            <button type="button" class="btn ghost" id="btn-export">Export</button>
+          </div>
+          <div class="row kv">
+            <div>
+              <div class="label">Disconnect</div>
+              <div class="desc">Remove @readyshelf</div>
+            </div>
+            <button type="button" class="btn ghost" id="btn-disconnect" style="color:var(--rose)">Disconnect</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="later">Later: audience monetization / Gates — not in v1.</p>
+    </section>
+  </main>
+
+  <footer>@ReadyShelfShopBot</footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="confetti-layer" aria-hidden="true"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var LS_INBOX = "readyshelf_mock_inbox_v3";
+  var LS_QUEUE = "readyshelf_mock_pubqueue_v3";
+  var LS_REVIEW = "readyshelf_mock_review_v3";
+  var LS_PAUSED = "readyshelf_mock_paused_v3";
+  var LS_FILTER = "readyshelf_mock_inbox_filter_v3";
+  var LS_TAB = "readyshelf_mock_tab_v3";
+  var LS_XP = "readyshelf_mock_xp_v3";
+  var LS_SELECTED = "readyshelf_mock_selected_v3";
+
+  var TAB_ORDER = ["inbox", "review", "queue", "settings"];
+  var reduceMotion = false;
+  try {
+    reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) { reduceMotion = false; }
+
+  /* Live local publish API (secrets stay on the server only) */
+  var MOCK_KEY = "dev";
+  var API_BASE = (function () {
+    try {
+      if (location.protocol === "file:") return "http://localhost:8787";
+      if (String(location.port) === "8787") return "";
+      if (/^https?:$/i.test(location.protocol) && /^(localhost|127\.0\.0\.1)$/i.test(location.hostname) && String(location.port) === "8787") return "";
+    } catch (e) { /* ignore */ }
+    return "http://localhost:8787";
+  })();
+
+  function apiUrl(path) {
+    return (API_BASE || "") + path;
+  }
+
+  function apiPost(path, body) {
+    return fetch(apiUrl(path), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-ReadyShelf-Mock-Key": MOCK_KEY
+      },
+      body: JSON.stringify(body || {})
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        if (!res.ok || !data || !data.ok) {
+          var msg = (data && data.error) || ("HTTP " + res.status);
+          var err = new Error(msg);
+          err.status = res.status;
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  var DEFAULT_INBOX = [
+    {
+      id: "src1",
+      group: "new",
+      title: "Forwarded tip · Batching posts",
+      from: "@readyshelf",
+      when: "Fri, 5 Sep 2026",
+      body: "Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.",
+      availability: "Available"
+    },
+    {
+      id: "src2",
+      group: "new",
+      title: "Forwarded note · One CTA",
+      from: "Saved message",
+      when: "Thu, 4 Sep 2026",
+      body: "Ask for one clear action — reply, save, or share. Multiple CTAs dilute the click.",
+      availability: "Available"
+    },
+    {
+      id: "src3",
+      group: "drafting",
+      title: "Channel snippet · Welcome path",
+      from: "@readyshelf",
+      when: "Wed, 3 Sep 2026",
+      body: "Pin a short “start here” post with links to your best 3 pieces. New joiners land soft.",
+      availability: "Available"
+    },
+    {
+      id: "src4",
+      group: "ready",
+      title: "Forwarded tip · Quiet hour",
+      from: "@readyshelf",
+      when: "Tue, 2 Sep 2026",
+      body: "One quiet hour beats five panicked evenings. Protect a block for drafting.",
+      availability: "Available"
+    }
+  ];
+
+  var DEFAULT_QUEUE = [
+    {
+      id: "pub1",
+      section: "upcoming",
+      title: "Tip: Batch your channel posts",
+      snippet: "Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.",
+      when: "2026-09-07T10:30:00+03:30",
+      channel: "@readyshelf",
+      status: "Queued",
+      version: "v1"
+    },
+    {
+      id: "pub2",
+      section: "upcoming",
+      title: "Tip: One CTA per post",
+      snippet: "Ask for one clear action — reply, save, or share.",
+      when: "2026-09-08T18:00:00+03:30",
+      channel: "@readyshelf",
+      status: "Queued",
+      version: "v1"
+    },
+    {
+      id: "pub3",
+      section: "sent",
+      title: "Tip: Protect a quiet hour",
+      snippet: "One quiet hour beats five panicked evenings.",
+      when: "2026-09-05T11:00:00+03:30",
+      channel: "@readyshelf",
+      status: "Sent",
+      version: "v1",
+      delivery: "Delivered"
+    }
+  ];
+
+  var DEFAULT_REVIEW = {
+    sourceId: "src4",
+    sourceTitle: "Forwarded tip · Quiet hour",
+    sourceFrom: "from @readyshelf",
+    sourceWhen: "Tue, 2 Sep 2026",
+    sourceBody: "“One quiet hour beats five panicked evenings. Protect a block for drafting.”",
+    preview:
+      "Tip: Quiet hour\n\nOne quiet hour beats five panicked evenings. Protect a block for drafting.\n\n— ReadyShelf",
+    whenLabel: "Sun, 7 Sep 2026 · 10:30",
+    whenIso: "2026-09-07T10:30:00+03:30",
+    channel: "@readyshelf",
+    version: "v1",
+    frozen: false
+  };
+
+  function loadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return Array.isArray(fallback) ? fallback.slice() : Object.assign({}, fallback);
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(fallback)) return Array.isArray(parsed) ? parsed : fallback.slice();
+      return parsed && typeof parsed === "object" ? parsed : Object.assign({}, fallback);
+    } catch (e) {
+      return Array.isArray(fallback) ? fallback.slice() : Object.assign({}, fallback);
+    }
+  }
+
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* ignore */ }
+  }
+
+  var inbox = loadJSON(LS_INBOX, DEFAULT_INBOX);
+  var queue = loadJSON(LS_QUEUE, DEFAULT_QUEUE);
+  var review = loadJSON(LS_REVIEW, DEFAULT_REVIEW);
+  var paused = false;
+  try { paused = localStorage.getItem(LS_PAUSED) === "1"; } catch (e) { paused = false; }
+
+  var inboxFilter = "new";
+  try {
+    var savedFilter = localStorage.getItem(LS_FILTER);
+    if (savedFilter === "new" || savedFilter === "drafting" || savedFilter === "ready") {
+      inboxFilter = savedFilter;
+    }
+  } catch (e) { /* ignore */ }
+
+  var selectedSourceId = review.sourceId || null;
+  try {
+    var savedSel = localStorage.getItem(LS_SELECTED);
+    if (savedSel) selectedSourceId = savedSel;
+  } catch (e) { /* ignore */ }
+
+  var xpCount = 0;
+  try {
+    var savedXp = parseInt(localStorage.getItem(LS_XP) || "0", 10);
+    if (!isNaN(savedXp) && savedXp >= 0) xpCount = savedXp;
+  } catch (e) { xpCount = 0; }
+
+  var highlightQueueId = null;
+  var currentTab = "inbox";
+  var switching = false;
+
+  /* —— Rewards / toast —— */
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+  var xpChip = document.getElementById("xp-chip");
+
+  function updateXpChip() {
+    xpChip.textContent = "Desk · " + xpCount + (xpCount === 1 ? " action" : " actions");
+  }
+  updateXpChip();
+
+  function bumpXp() {
+    xpCount += 1;
+    try { localStorage.setItem(LS_XP, String(xpCount)); } catch (e) { /* ignore */ }
+    updateXpChip();
+    xpChip.classList.remove("pulse");
+    void xpChip.offsetWidth;
+    if (!reduceMotion) xpChip.classList.add("pulse");
+    setTimeout(function () { xpChip.classList.remove("pulse"); }, 220);
+  }
+
+  function toast(msg, opts) {
+    opts = opts || {};
+    toastEl.innerHTML = msg;
+    toastEl.classList.toggle("reward", !!opts.reward);
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastEl.classList.remove("show");
+      toastEl.classList.remove("reward");
+    }, opts.ms || 2400);
+  }
+
+  function reward(msg) {
+    bumpXp();
+    toast(msg, { reward: true });
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* —— Confetti-lite —— */
+  function confettiLite(originEl) {
+    if (reduceMotion) return;
+    var layer = document.getElementById("confetti-layer");
+    var rect = (originEl || document.body).getBoundingClientRect();
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + Math.min(rect.height / 2, 40);
+    var colors = ["#7dd3fc", "#a5b4fc", "#7ee2a0", "#c4b5fd", "#67e8f9", "#94a3b8"];
+    var n = 12;
+    for (var i = 0; i < n; i++) {
+      var bit = document.createElement("span");
+      bit.className = "confetti-bit";
+      var angle = (Math.PI * 2 * i) / n + (Math.random() * 0.4);
+      var dist = 48 + Math.random() * 70;
+      bit.style.left = cx + "px";
+      bit.style.top = cy + "px";
+      bit.style.background = colors[i % colors.length];
+      bit.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      bit.style.setProperty("--dy", (Math.sin(angle) * dist - 20) + "px");
+      bit.style.setProperty("--rot", (Math.random() * 220 - 110) + "deg");
+      layer.appendChild(bit);
+      (function (el) {
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 650);
+      })(bit);
+    }
+  }
+
+  /* —— Button ripple —— */
+  document.addEventListener("pointerdown", function (e) {
+    var btn = e.target.closest(".btn");
+    if (!btn || btn.disabled || reduceMotion) return;
+    var r = btn.getBoundingClientRect();
+    btn.style.setProperty("--rx", ((e.clientX - r.left) / r.width * 100) + "%");
+    btn.style.setProperty("--ry", ((e.clientY - r.top) / r.height * 100) + "%");
+    btn.classList.remove("ripple-flash");
+    void btn.offsetWidth;
+    btn.classList.add("ripple-flash");
+    setTimeout(function () { btn.classList.remove("ripple-flash"); }, 450);
+  }, { passive: true });
+
+  /* —— Tabs —— */
+  var tabs = document.querySelectorAll(".tab");
+  var panels = {
+    inbox: document.getElementById("panel-inbox"),
+    review: document.getElementById("panel-review"),
+    queue: document.getElementById("panel-queue"),
+    settings: document.getElementById("panel-settings")
+  };
+
+  function switchTab(name, opts) {
+    opts = opts || {};
+    if (!panels[name] || name === currentTab && !opts.force) {
+      if (name === currentTab) {
+        if (name === "inbox") renderInbox();
+        if (name === "review") renderReview();
+        if (name === "queue") renderQueue();
+      }
+      return;
+    }
+    if (switching) return;
+    var prev = currentTab;
+    currentTab = name;
+
+    tabs.forEach(function (t) {
+      var on = t.getAttribute("data-tab") === name;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+    });
+
+    try { localStorage.setItem(LS_TAB, name); } catch (e) { /* ignore */ }
+    if (location.hash !== "#" + name) {
+      try { history.replaceState(null, "", "#" + name); } catch (e2) { /* ignore */ }
+    }
+
+    var leave = panels[prev];
+    var enter = panels[name];
+
+    if (reduceMotion || !leave || !leave.classList.contains("active")) {
+      Object.keys(panels).forEach(function (k) {
+        var p = panels[k];
+        var on = k === name;
+        p.classList.toggle("active", on);
+        p.classList.remove("leaving");
+        if (on) p.removeAttribute("hidden");
+        else p.setAttribute("hidden", "");
+      });
+      if (name === "inbox") renderInbox();
+      if (name === "review") renderReview();
+      if (name === "queue") renderQueue();
+      return;
+    }
+
+    switching = true;
+    leave.classList.add("leaving");
+    leave.classList.remove("active");
+
+    enter.removeAttribute("hidden");
+    enter.classList.add("active");
+
+    Object.keys(panels).forEach(function (k) {
+      if (k !== name && k !== prev) {
+        panels[k].classList.remove("active", "leaving");
+        panels[k].setAttribute("hidden", "");
+      }
+    });
+
+    if (name === "inbox") renderInbox();
+    if (name === "review") renderReview();
+    if (name === "queue") renderQueue();
+
+    setTimeout(function () {
+      leave.classList.remove("leaving");
+      leave.setAttribute("hidden", "");
+      switching = false;
+    }, 180);
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      switchTab(t.getAttribute("data-tab"));
+    });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.defaultPrevented) return;
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "TEXTAREA" || tag === "INPUT" || (e.target && e.target.isContentEditable)) return;
+    var map = { "1": "inbox", "2": "review", "3": "queue", "4": "settings" };
+    if (map[e.key]) {
+      e.preventDefault();
+      switchTab(map[e.key]);
+    }
+  });
+
+  /* Resolve initial tab: hash > localStorage > inbox */
+  (function initTab() {
+    var hash = (location.hash || "").replace(/^#/, "");
+    var saved = null;
+    try { saved = localStorage.getItem(LS_TAB); } catch (e) { saved = null; }
+    var start = "inbox";
+    if (hash && TAB_ORDER.indexOf(hash) >= 0) start = hash;
+    else if (saved && TAB_ORDER.indexOf(saved) >= 0) start = saved;
+    currentTab = "";
+    switchTab(start, { force: true });
+  })();
+
+  /* —— Inbox —— */
+  function syncFilterChips() {
+    document.querySelectorAll(".chip[data-filter]").forEach(function (c) {
+      c.setAttribute("aria-pressed", c.getAttribute("data-filter") === inboxFilter ? "true" : "false");
+    });
+  }
+
+  document.querySelectorAll(".chip[data-filter]").forEach(function (c) {
+    c.addEventListener("click", function () {
+      inboxFilter = c.getAttribute("data-filter");
+      try { localStorage.setItem(LS_FILTER, inboxFilter); } catch (e) { /* ignore */ }
+      syncFilterChips();
+      renderInbox();
+    });
+  });
+
+  function primaryLabel(group) {
+    if (group === "drafting") return "Continue";
+    if (group === "ready") return "Open review";
+    return "Prepare post";
+  }
+
+  function statusChip(group) {
+    if (group === "ready") return '<span class="status ready">Ready</span>';
+    if (group === "drafting") return '<span class="status draft">Draft</span>';
+    return "";
+  }
+
+  function emptyCta(filter) {
+    if (filter === "new") {
+      return {
+        title: "Inbox clear",
+        body: "No new sources right now.",
+        cta: "See drafts",
+        action: "filter-drafting"
+      };
+    }
+    if (filter === "drafting") {
+      return {
+        title: "No drafts",
+        body: "Prepare a new source to start a draft.",
+        cta: "Back to New",
+        action: "filter-new"
+      };
+    }
+    return {
+      title: "Nothing to review",
+      body: "Prepare a post from Inbox · New.",
+      cta: "Open New",
+      action: "filter-new"
+    };
+  }
+
+  function renderInbox() {
+    syncFilterChips();
+    var items = inbox.filter(function (s) { return s.group === inboxFilter; });
+    var list = document.getElementById("list-inbox");
+    if (!items.length) {
+      var empty = emptyCta(inboxFilter);
+      list.innerHTML =
+        '<div class="empty">' +
+          "<strong>" + escapeHtml(empty.title) + "</strong>" +
+          escapeHtml(empty.body) +
+          '<div><button type="button" class="btn primary" data-empty-action="' + empty.action + '">' +
+            escapeHtml(empty.cta) +
+          "</button></div>" +
+        "</div>";
+      return;
+    }
+    list.innerHTML = items.map(function (s) {
+      var sel = selectedSourceId === s.id ? " selected" : "";
+      return (
+        '<article class="card pressable' + sel + '" data-id="' + escapeHtml(s.id) + '">' +
+          "<h2 class=\"item-title\">" + escapeHtml(s.title) + statusChip(s.group) + "</h2>" +
+          '<p class="item-meta">' + escapeHtml(s.from) + '<span class="dot">·</span>' + escapeHtml(s.when) + "</p>" +
+          '<div class="item-actions">' +
+            '<button type="button" class="btn primary" data-action="prepare">' + primaryLabel(s.group) + "</button>" +
+          "</div>" +
+        "</article>"
+      );
+    }).join("");
+  }
+
+  document.getElementById("panel-inbox").addEventListener("click", function (e) {
+    var emptyBtn = e.target.closest("[data-empty-action]");
+    if (emptyBtn) {
+      var act = emptyBtn.getAttribute("data-empty-action");
+      if (act === "filter-new") inboxFilter = "new";
+      if (act === "filter-drafting") inboxFilter = "drafting";
+      if (act === "filter-ready") inboxFilter = "ready";
+      try { localStorage.setItem(LS_FILTER, inboxFilter); } catch (err) { /* ignore */ }
+      syncFilterChips();
+      renderInbox();
+      return;
+    }
+
+    var btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    var article = btn.closest("[data-id]");
+    var id = article ? article.getAttribute("data-id") : null;
+    var src = inbox.find(function (s) { return s.id === id; });
+    var action = btn.getAttribute("data-action");
+
+    if (action === "prepare" && src) {
+      if (src.group === "new") {
+        article.classList.add("preparing");
+        btn.disabled = true;
+        btn.textContent = "Preparing…";
+        src.group = "drafting";
+        saveJSON(LS_INBOX, inbox);
+
+        setTimeout(function () {
+          src.group = "ready";
+          saveJSON(LS_INBOX, inbox);
+          loadSourceIntoReview(src);
+          selectedSourceId = src.id;
+          try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e2) { /* ignore */ }
+          inboxFilter = "ready";
+          try { localStorage.setItem(LS_FILTER, inboxFilter); } catch (e3) { /* ignore */ }
+          reward("<strong>Draft ready</strong> · +1 to Review");
+          switchTab("review");
+        }, reduceMotion ? 0 : 420);
+      } else if (src.group === "drafting") {
+        src.group = "ready";
+        saveJSON(LS_INBOX, inbox);
+        loadSourceIntoReview(src);
+        selectedSourceId = src.id;
+        try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e4) { /* ignore */ }
+        reward("<strong>Draft ready</strong> · +1 to Review");
+        switchTab("review");
+      } else {
+        loadSourceIntoReview(src);
+        selectedSourceId = src.id;
+        try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e5) { /* ignore */ }
+        switchTab("review");
+        toast("<strong>Opened</strong> · ready for approve");
+      }
+    }
+  });
+
+  function tipTitleFromSource(src) {
+    var t = src.title
+      .replace(/^Forwarded (tip|note) · /i, "")
+      .replace(/^Channel snippet · /i, "");
+    return "Tip: " + t;
+  }
+
+  function loadSourceIntoReview(src) {
+    review.sourceId = src.id;
+    review.sourceTitle = src.title;
+    review.sourceFrom = "from " + src.from;
+    review.sourceWhen = src.when;
+    review.sourceBody = "“" + src.body + "”";
+    review.preview =
+      tipTitleFromSource(src) +
+      "\n\n" + src.body +
+      "\n\n— ReadyShelf";
+    review.frozen = false;
+    review.version = "v1";
+    saveJSON(LS_REVIEW, review);
+    renderReview();
+  }
+
+  /* —— Review —— */
+  var editing = false;
+
+  function renderReview() {
+    document.getElementById("rev-source-title").textContent = review.sourceTitle;
+    document.getElementById("rev-source-from").textContent = review.sourceFrom;
+    document.getElementById("rev-source-when").textContent = review.sourceWhen;
+    document.getElementById("rev-source-body").textContent = review.sourceBody;
+    document.getElementById("rev-preview-body").textContent = review.preview;
+    document.getElementById("rev-when").textContent = review.whenLabel;
+    document.getElementById("rev-version-foot").textContent =
+      (review.version || "v1") + (review.frozen ? " · frozen" : " · freezes on approve");
+    document.getElementById("btn-approve").textContent = review.frozen
+      ? "Already queued"
+      : "Approve & queue · " + review.channel + " · 10:30";
+    var editEl = document.getElementById("rev-edit");
+    editEl.classList.toggle("show", editing);
+    if (editing) editEl.value = review.preview;
+    document.getElementById("btn-approve").disabled = !!review.frozen;
+    document.getElementById("btn-edit").disabled = !!review.frozen;
+    document.getElementById("btn-shorter").disabled = !!review.frozen;
+    document.getElementById("btn-reject").disabled = !!review.frozen;
+
+    var draftCard = document.getElementById("rev-draft-card");
+    if (selectedSourceId && review.sourceId === selectedSourceId) {
+      draftCard.classList.add("selected");
+    } else {
+      draftCard.classList.remove("selected");
+    }
+  }
+
+  document.getElementById("btn-edit").addEventListener("click", function () {
+    if (review.frozen) return;
+    editing = !editing;
+    var editEl = document.getElementById("rev-edit");
+    if (editing) {
+      editEl.classList.add("show");
+      editEl.value = review.preview;
+      editEl.focus();
+      toast("<strong>Edit</strong> · change draft, then Approve");
+    } else {
+      review.preview = editEl.value.trim() || review.preview;
+      saveJSON(LS_REVIEW, review);
+      editEl.classList.remove("show");
+      renderReview();
+      reward("<strong>Saved</strong> · preview updated");
+    }
+  });
+
+  document.getElementById("btn-shorter").addEventListener("click", function () {
+    if (review.frozen) return;
+    var lines = review.preview.split(/\n+/).filter(Boolean);
+    if (lines.length > 2) {
+      review.preview = lines.slice(0, 2).join("\n\n");
+    } else {
+      review.preview = lines[0] || review.preview;
+    }
+    saveJSON(LS_REVIEW, review);
+    editing = false;
+    renderReview();
+    reward("<strong>Shorter</strong> · trimmed draft");
+  });
+
+  document.getElementById("btn-reject").addEventListener("click", function () {
+    if (review.frozen) return;
+    editing = false;
+    /* Return source to Inbox as new (or keep drafting) */
+    if (review.sourceId) {
+      var src = inbox.find(function (s) { return s.id === review.sourceId; });
+      if (src && src.group === "ready") {
+        src.group = "new";
+        saveJSON(LS_INBOX, inbox);
+      }
+    }
+    review.frozen = false;
+    saveJSON(LS_REVIEW, review);
+    inboxFilter = "new";
+    try { localStorage.setItem(LS_FILTER, inboxFilter); } catch (e) { /* ignore */ }
+    reward("<strong>Rejected</strong> · back to Inbox");
+    switchTab("inbox");
+  });
+
+  document.getElementById("btn-approve").addEventListener("click", function () {
+    if (review.frozen) {
+      toast("<strong>Frozen</strong> · already queued");
+      return;
+    }
+    if (editing) {
+      var editEl = document.getElementById("rev-edit");
+      review.preview = editEl.value.trim() || review.preview;
+      editing = false;
+    }
+
+    var frozenText = String(review.preview || "").trim();
+    if (!frozenText) {
+      toast("<strong>Empty draft</strong> · nothing to publish");
+      return;
+    }
+
+    var scheduledAt = review.whenIso;
+    var btn = document.getElementById("btn-approve");
+    var prevLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Publishing LIVE…";
+
+    apiPost("/api/approve-queue", {
+      text: frozenText,
+      frozenText: frozenText,
+      scheduledAt: scheduledAt,
+      time: scheduledAt,
+      status: "approved",
+      source: review.sourceId || null
+    })
+      .then(function () {
+        return apiPost("/api/publish", {
+          text: frozenText,
+          scheduledAt: scheduledAt
+        });
+      })
+      .then(function (pubRes) {
+        review.frozen = true;
+        saveJSON(LS_REVIEW, review);
+
+        /* Remove from inbox review list once approved */
+        if (review.sourceId) {
+          inbox = inbox.filter(function (s) { return s.id !== review.sourceId; });
+          saveJSON(LS_INBOX, inbox);
+        }
+
+        var link = pubRes && pubRes.link ? pubRes.link : null;
+        var item = {
+          id: "pub" + Date.now(),
+          section: "sent",
+          title: frozenText.split(/\n/)[0].slice(0, 56),
+          snippet: frozenText.replace(/\n+/g, " ").slice(0, 160),
+          when: new Date().toISOString(),
+          channel: review.channel,
+          status: "LIVE",
+          version: review.version,
+          delivery: "LIVE to Telegram",
+          live: true,
+          link: link,
+          messageId: pubRes && pubRes.message_id ? pubRes.message_id : null,
+          frozenText: frozenText
+        };
+        queue.unshift(item);
+        saveJSON(LS_QUEUE, queue);
+        highlightQueueId = item.id;
+        renderReview();
+        confettiLite(btn);
+        var linkHtml = link
+          ? ' · <a href="' + escapeHtml(link) + '" target="_blank" rel="noopener">' + escapeHtml(link) + "</a>"
+          : "";
+        reward("<strong>LIVE to Telegram</strong>" + linkHtml);
+        setTimeout(function () { switchTab("queue"); }, reduceMotion ? 0 : 380);
+      })
+      .catch(function (err) {
+        /* Do not freeze or claim published on failure */
+        review.frozen = false;
+        saveJSON(LS_REVIEW, review);
+        btn.disabled = false;
+        btn.textContent = prevLabel || ("Approve & queue · " + review.channel + " · 10:30");
+        renderReview();
+        toast("<strong>Publish failed</strong> · " + escapeHtml((err && err.message) || "error"));
+      });
+  });
+
+  /* —— Queue —— */
+  function formatTehran(iso) {
+    try {
+      var d = new Date(iso);
+      var fmt = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Tehran",
+        weekday: "short",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+      return fmt.format(d);
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  function updatePauseBtn() {
+    var btn = document.getElementById("btn-pause");
+    var hint = document.getElementById("pause-hint");
+    btn.textContent = paused ? "Resume" : "Pause";
+    hint.textContent = paused ? "Publishing paused" : "Publishing on schedule";
+  }
+
+  function renderQueue() {
+    var upcoming = queue.filter(function (p) { return p.section === "upcoming"; });
+    var sent = queue.filter(function (p) { return p.section === "sent"; });
+
+    function itemHtml(p) {
+      var isSent = p.section === "sent";
+      var isLive = !!(p.live || p.status === "LIVE");
+      var status = paused && !isSent ? "Paused" : p.status;
+      var tagClass = isLive ? "live" : (isSent ? "sent" : (status === "Paused" ? "paused" : "queued"));
+      var accent = isSent || isLive ? "sent" : (status === "Paused" ? "paused" : "upcoming");
+      var flash = highlightQueueId === p.id ? " flash" : "";
+      var metaExtra = "";
+      if (isSent || isLive) {
+        if (p.delivery) metaExtra += " · " + escapeHtml(p.delivery);
+        if (p.link) {
+          metaExtra +=
+            ' · <a href="' + escapeHtml(p.link) + '" target="_blank" rel="noopener">' +
+            escapeHtml(p.link) +
+            "</a>";
+        }
+      }
+      return (
+        '<div class="q-row ' + accent + flash + '" data-id="' + escapeHtml(p.id) + '">' +
+          "<div style=\"min-width:0;flex:1\">" +
+            '<p class="q-title">' + escapeHtml(p.title) +
+              ' <span class="status ' + tagClass + '">' + escapeHtml(status) + "</span></p>" +
+            '<p class="q-meta">' + escapeHtml(formatTehran(p.when)) + metaExtra + "</p>" +
+          "</div>" +
+          (isSent
+            ? ""
+            : '<div class="q-actions">' +
+                '<button type="button" class="btn ghost" data-action="publish">Publish now</button>' +
+                '<button type="button" class="btn ghost" data-action="reschedule">Reschedule</button>' +
+                '<button type="button" class="btn ghost" data-action="cancel" style="color:var(--rose)">Cancel</button>' +
+              "</div>") +
+        "</div>"
+      );
+    }
+
+    var upEl = document.getElementById("list-upcoming");
+    if (upcoming.length) {
+      upEl.innerHTML = upcoming.map(function (p) { return itemHtml(p); }).join("");
+      upEl.style.padding = "14px 14px 4px";
+    } else {
+      upEl.style.padding = "14px";
+      upEl.innerHTML =
+        '<div class="empty" style="border:0;background:transparent;padding:20px 8px">' +
+          "<strong>Queue empty</strong>Approve a draft to add upcoming posts." +
+          '<div><button type="button" class="btn primary" data-empty-action="goto-review">Open Review</button></div>' +
+        "</div>";
+    }
+
+    var sentEl = document.getElementById("list-sent");
+    if (sent.length) {
+      sentEl.innerHTML = sent.map(function (p) { return itemHtml(p); }).join("");
+      sentEl.style.padding = "14px 14px 4px";
+    } else {
+      sentEl.style.padding = "14px";
+      sentEl.innerHTML = '<div class="empty" style="border:0;background:transparent;padding:16px 0">Nothing sent yet.</div>';
+    }
+
+    updatePauseBtn();
+
+    if (highlightQueueId) {
+      var hid = highlightQueueId;
+      setTimeout(function () {
+        if (highlightQueueId === hid) highlightQueueId = null;
+        var row = document.querySelector('.q-row[data-id="' + hid + '"]');
+        if (row) row.classList.remove("flash");
+      }, 900);
+    }
+  }
+
+  document.getElementById("list-upcoming").addEventListener("click", function (e) {
+    var emptyBtn = e.target.closest("[data-empty-action]");
+    if (emptyBtn && emptyBtn.getAttribute("data-empty-action") === "goto-review") {
+      switchTab("review");
+      return;
+    }
+    var btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    var article = btn.closest("[data-id]");
+    var id = article ? article.getAttribute("data-id") : null;
+    var action = btn.getAttribute("data-action");
+    var pub = queue.find(function (p) { return p.id === id; });
+
+    if (action === "publish" && pub) {
+      var textToSend = String(pub.frozenText || pub.snippet || pub.title || "").trim();
+      if (!textToSend) {
+        toast("<strong>Publish failed</strong> · empty text");
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "LIVE…";
+      apiPost("/api/approve-queue", {
+        text: textToSend,
+        frozenText: textToSend,
+        scheduledAt: pub.when,
+        time: pub.when,
+        status: "approved",
+        source: pub.id
+      })
+        .then(function () {
+          return apiPost("/api/publish", { text: textToSend, scheduledAt: pub.when });
+        })
+        .then(function (pubRes) {
+          pub.section = "sent";
+          pub.status = "LIVE";
+          pub.delivery = "LIVE to Telegram";
+          pub.live = true;
+          pub.link = pubRes && pubRes.link ? pubRes.link : null;
+          pub.messageId = pubRes && pubRes.message_id ? pubRes.message_id : null;
+          pub.when = new Date().toISOString();
+          saveJSON(LS_QUEUE, queue);
+          renderQueue();
+          var linkHtml = pub.link
+            ? ' · <a href="' + escapeHtml(pub.link) + '" target="_blank" rel="noopener">' + escapeHtml(pub.link) + "</a>"
+            : "";
+          reward("<strong>LIVE to Telegram</strong>" + linkHtml);
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = "Publish now";
+          toast("<strong>Publish failed</strong> · " + escapeHtml((err && err.message) || "error"));
+        });
+    }
+    if (action === "reschedule") {
+      toast("<strong>Reschedule</strong> · picker in real Mini App");
+    }
+    if (action === "cancel") {
+      queue = queue.filter(function (p) { return p.id !== id; });
+      saveJSON(LS_QUEUE, queue);
+      renderQueue();
+      reward("<strong>Cancelled</strong> · removed from upcoming");
+    }
+  });
+
+  document.getElementById("btn-pause").addEventListener("click", function () {
+    paused = !paused;
+    try { localStorage.setItem(LS_PAUSED, paused ? "1" : "0"); } catch (e) { /* ignore */ }
+    queue = queue.map(function (p) {
+      if (p.section === "upcoming") {
+        return Object.assign({}, p, { status: paused ? "Paused" : "Queued" });
+      }
+      return p;
+    });
+    saveJSON(LS_QUEUE, queue);
+    renderQueue();
+    reward(paused
+      ? "<strong>Paused</strong> · queue on hold"
+      : "<strong>Resumed</strong> · publishing on schedule");
+  });
+
+  /* —— Settings —— */
+  document.getElementById("btn-try-free").addEventListener("click", function () {
+    reward("<strong>Desk unlocked</strong> (mock)");
+  });
+  document.getElementById("btn-keep-desk").addEventListener("click", function () {
+    reward("<strong>Desk unlocked</strong> (mock)");
+  });
+  document.getElementById("btn-support").addEventListener("click", function () {
+    toast("<strong>Support</strong> · @ReadyShelfShopBot later");
+  });
+  document.getElementById("btn-export").addEventListener("click", function () {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      channel: "@readyshelf",
+      timezone: "Asia/Tehran",
+      note: "mock export",
+      publications: queue
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "readyshelf-export-mock.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    reward("<strong>Exported</strong> · JSON downloaded");
+  });
+  document.getElementById("btn-disconnect").addEventListener("click", function () {
+    toast("<strong>Disconnect</strong> · disabled in demo");
+  });
+
+  /* Init panels that may already be visible */
+  renderInbox();
+  renderReview();
+  renderQueue();
+})();
+</script>
+</body>
+</html>
