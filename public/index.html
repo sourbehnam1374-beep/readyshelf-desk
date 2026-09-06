@@ -1328,6 +1328,14 @@ One quiet hour beats five panicked evenings.</div>
       });
   }
 
+  setInterval(function () {
+    if (document.hidden) return;
+    if (currentTab === "inbox") loadRemoteSources();
+  }, 5000);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && currentTab === "inbox") loadRemoteSources();
+  });
+
   function loadRemotePosts() {
     return apiGet("/api/posts?status=draft,ready,frozen")
       .then(function (data) {
@@ -1396,7 +1404,7 @@ One quiet hour beats five panicked evenings.</div>
     if (filter === "new") {
       return {
         title: "Inbox clear",
-        body: "No new sources right now.",
+        body: "Forward a message to @ReadyShelfShopBot — it appears here.",
         cta: "See drafts",
         action: "filter-drafting"
       };

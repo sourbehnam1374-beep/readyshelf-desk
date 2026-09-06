@@ -58,7 +58,11 @@ Ingest (bot):
 POST /api/sources
 Header: X-ReadyShelf-Ingest-Key
 { "text": "...", "fromUsername": "…", "forwardedFrom": "…" }
+
+POST /api/telegram/webhook     Telegram secret header (forwards from @ReadyShelfShopBot)
 ```
+
+Forward a message to `@ReadyShelfShopBot` → stored as a source → Desk Inbox (polls every 5s). On boot the service registers `WEBAPP_URL/api/telegram/webhook`.
 
 Operator:
 

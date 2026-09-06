@@ -196,6 +196,125 @@ function newId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+async function ingestSource(fields) {
+  const text = String(fields.text || "").trim();
+  if (!text) {
+    const err = new Error("text is required");
+    err.status = 400;
+    throw err;
+  }
+  const now = new Date().toISOString();
+  const source = {
+    id: newId("src"),
+    text,
+    fromUserId: fields.fromUserId ?? null,
+    fromUsername: fields.fromUsername ?? null,
+    messageId: fields.messageId ?? null,
+    forwardedFrom: fields.forwardedFrom ?? null,
+    status: "new",
+    createdAt: now,
+  };
+  const sources = await readSources();
+  sources.push(source);
+  await writeSources(sources);
+  if (process.env.DRAFT_ON_INGEST !== "0") {
+    generateForSourceId(source.id).catch((err) => {
+      console.error("draft-on-ingest failed", err && err.message);
+    });
+  }
+  return source;
+}
+
+function webhookSecret() {
+  if (process.env.TELEGRAM_WEBHOOK_SECRET) return String(process.env.TELEGRAM_WEBHOOK_SECRET);
+  if (!BOT_TOKEN) return "";
+  return crypto.createHmac("sha256", BOT_TOKEN).update("readyshelf-webhook").digest("hex").slice(0, 48);
+}
+
+function requireTelegramWebhook(req, res, next) {
+  const want = webhookSecret();
+  const got = req.get("X-Telegram-Bot-Api-Secret-Token") || "";
+  if (!want) {
+    return res.status(503).json({ ok: false, error: "webhook secret not configured" });
+  }
+  const a = Buffer.from(String(got));
+  const b = Buffer.from(String(want));
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized — bad webhook secret" });
+  }
+  return next();
+}
+
+function forwardedFromLabel(msg) {
+  if (!msg || typeof msg !== "object") return null;
+  if (msg.forward_from) {
+    return msg.forward_from.username
+      ? `@${msg.forward_from.username}`
+      : msg.forward_from.first_name || "forward";
+  }
+  if (msg.forward_from_chat) {
+    return msg.forward_from_chat.username
+      ? `@${msg.forward_from_chat.username}`
+      : msg.forward_from_chat.title || "forward";
+  }
+  if (msg.forward_sender_name) return msg.forward_sender_name;
+  const origin = msg.forward_origin;
+  if (origin) {
+    if (origin.sender_user?.username) return `@${origin.sender_user.username}`;
+    if (origin.sender_user?.first_name) return origin.sender_user.first_name;
+    if (origin.sender_user_name) return origin.sender_user_name;
+    if (origin.chat?.title) return origin.chat.title;
+    if (origin.sender_chat?.title) return origin.sender_chat.title;
+    return "forward";
+  }
+  return msg.forward_date ? "forward" : null;
+}
+
+function sourceFieldsFromTelegramMessage(msg) {
+  const text = String(msg.text || msg.caption || "").trim();
+  if (!text) return null;
+  if (text.startsWith("/")) return null;
+  return {
+    text,
+    fromUserId: msg.from?.id ?? null,
+    fromUsername: msg.from?.username ?? null,
+    messageId: msg.message_id ?? null,
+    forwardedFrom: forwardedFromLabel(msg),
+  };
+}
+
+async function handleBotCommand(msg) {
+  const text = String(msg.text || "").trim();
+  const chatId = msg.chat?.id;
+  if (!chatId) return;
+  const bot = getBot();
+  const deskBtn = {
+    reply_markup: {
+      inline_keyboard: [[{ text: "Open Desk", web_app: { url: WEBAPP_URL } }]],
+    },
+  };
+  const cmd = text.split(/\s+/)[0].split("@")[0].toLowerCase();
+  if (cmd === "/start" || cmd === "/desk" || /^desk$/i.test(text)) {
+    await bot.sendMessage(chatId, "ReadyShelf Desk — forward a source here, then Approve in Desk.", deskBtn);
+    return;
+  }
+  if (cmd === "/help" || cmd === "/how" || /^how$/i.test(text) || /^help$/i.test(text)) {
+    await bot.sendMessage(
+      chatId,
+      "Forward a message to this bot → it appears in Desk Inbox.\nGenerate a draft → Approve freezes exact text → it posts to @readyshelf.",
+      deskBtn,
+    );
+    return;
+  }
+  if (cmd === "/plan" || /^plan$/i.test(text)) {
+    await bot.sendMessage(chatId, "Plan is desk30 — ⭐ 500 / 30 days on @ReadyShelfShopBot. Existing Stars SKU.", deskBtn);
+    return;
+  }
+  if (cmd === "/demo" || /^demo$/i.test(text)) {
+    await bot.sendMessage(chatId, "Forward any tip or note to this bot, then open Desk to see it in Inbox.", deskBtn);
+  }
+}
+
 async function upsertDraftForSource(source, generated) {
   const now = new Date().toISOString();
   const posts = await readPosts();
@@ -263,12 +382,14 @@ function requireIngestKey(req, res, next) {
   return next();
 }
 
-/** initData HMAC on all Mini App mutations. Bot ingest is the only exception. */
+/** initData HMAC on all Mini App mutations. Bot ingest/webhook are the only exceptions. */
 function requireInitDataOnMutations(req, res, next) {
   if (!req.path.startsWith("/api")) return next();
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
-  if (method === "POST" && req.path === "/api/sources") return next();
+  if (method === "POST" && (req.path === "/api/sources" || req.path === "/api/telegram/webhook")) {
+    return next();
+  }
   return requireTelegramAuth(req, res, next);
 }
 
@@ -294,6 +415,7 @@ app.get("/api/health", (_req, res) => {
     },
     persist: { driver: "sqlite", volume: DATA_DIR },
     success: SUCCESS_CRITERIA,
+    bot: { webhook: "/api/telegram/webhook" },
   });
 });
 
@@ -409,40 +531,63 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
   }
 });
 
+app.post("/api/telegram/webhook", requireTelegramWebhook, async (req, res) => {
+  try {
+    const update = req.body || {};
+    const msg = update.message || update.edited_message || update.channel_post;
+    if (!msg) return res.json({ ok: true });
+
+    const text = String(msg.text || "").trim();
+    if (text.startsWith("/") || /^(desk|demo|how|plan|help)$/i.test(text)) {
+      handleBotCommand(msg).catch((err) => {
+        console.error("bot command failed", err && err.message);
+      });
+      return res.json({ ok: true });
+    }
+
+    const fields = sourceFieldsFromTelegramMessage(msg);
+    if (!fields) {
+      if (msg.chat?.id && BOT_TOKEN) {
+        getBot()
+          .sendMessage(msg.chat.id, "Forward a text message (or a caption) to save it in Desk.")
+          .catch(() => {});
+      }
+      return res.json({ ok: true });
+    }
+
+    const source = await ingestSource(fields);
+    if (msg.chat?.id && BOT_TOKEN) {
+      getBot()
+        .sendMessage(msg.chat.id, "Saved to Desk Inbox.", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "Open Desk", web_app: { url: WEBAPP_URL } }]],
+          },
+        })
+        .catch(() => {});
+    }
+    return res.json({ ok: true, sourceId: source.id });
+  } catch (err) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      error: err.message || "webhook failed",
+    });
+  }
+});
+
 app.post("/api/sources", requireIngestKey, async (req, res) => {
   try {
     const body = req.body || {};
-    const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!text) {
-      return res.status(400).json({ ok: false, error: "text is required" });
-    }
-
-    const now = new Date().toISOString();
-    const source = {
-      id: `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      text,
+    const source = await ingestSource({
+      text: body.text,
       fromUserId: body.fromUserId ?? null,
       fromUsername: body.fromUsername ?? null,
       messageId: body.messageId ?? null,
       forwardedFrom: body.forwardedFrom ?? null,
-      status: "new",
-      createdAt: now,
-    };
-
+    });
     const sources = await readSources();
-    sources.push(source);
-    await writeSources(sources);
-
-    const draftOnIngest = process.env.DRAFT_ON_INGEST !== "0";
-    if (draftOnIngest) {
-      generateForSourceId(source.id).catch((err) => {
-        console.error("draft-on-ingest failed", err && err.message);
-      });
-    }
-
     return res.json({ ok: true, source, count: sources.length });
   } catch (err) {
-    return res.status(500).json({
+    return res.status(err.status || 500).json({
       ok: false,
       error: err.message || "ingest failed",
     });
@@ -559,5 +704,12 @@ app.listen(PORT, "0.0.0.0", () => {
   const p = pickProvider();
   console.log(`Draft Engine: ${p.name} · ${p.model} · ${PROMPT_VERSION}`);
   console.log(`Data dir: ${DATA_DIR} · sqlite`);
+  if (BOT_TOKEN && /^https:\/\//i.test(WEBAPP_URL)) {
+    const hook = `${String(WEBAPP_URL).replace(/\/$/, "")}/api/telegram/webhook`;
+    getBot()
+      .setWebHook(hook, { secret_token: webhookSecret() })
+      .then(() => console.log("Telegram webhook registered"))
+      .catch((err) => console.error("webhook register failed", err && err.message));
+  }
 });
 
