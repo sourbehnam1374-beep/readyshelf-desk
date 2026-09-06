@@ -85,6 +85,21 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 - `ALLOW_MOCK_KEY` must stay **off** in production.
 - `GET /api/health` stays public.
 
+
+## Success criteria
+
+1. Forward or paste a source → it is stored.
+2. Generate (or ingest) → a Post with status ready, `source_id`, `draft_text`, `model`, `prompt_version`.
+3. Inbox shows sources and Draft ready.
+4. Review is Source | Draft. No Verified badge.
+5. Approve freezes the exact `draft_text`. Frozen posts cannot be edited.
+6. Publish sends `frozen_text` only. Nothing live without Approve.
+7. Provider: `XAI_API_KEY`, else `OPENAI_API_KEY`, else deterministic cleaner. Temperature 0.
+8. initData HMAC on every Mini App mutation. Bot ingest uses `INGEST_KEY`.
+9. SQLite on the Railway volume (`/app/data`). JSON imported once.
+10. Same Railway service. `WEBAPP_URL` / `BOT_TOKEN` / `INGEST_KEY` unchanged.
+11. Stars billing remains `desk30`.
+
 ## Must NOT ship
 
 - “AI in your voice” / style cloning / personality theater

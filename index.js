@@ -7,7 +7,7 @@ import TelegramBot from "node-telegram-bot-api";
 import crypto from "node:crypto";
 import fsSync from "node:fs";
 import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
-import { TRUST_VERSION, resolvePublishText, isLocked } from "./lib/trust.js";
+import { TRUST_VERSION, resolvePublishText, isLocked, SUCCESS_CRITERIA } from "./lib/trust.js";
 import { openStore } from "./lib/db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -293,6 +293,7 @@ app.get("/api/health", (_req, res) => {
       ingest: Boolean(INGEST_KEY),
     },
     persist: { driver: "sqlite", volume: DATA_DIR },
+    success: SUCCESS_CRITERIA,
   });
 });
 

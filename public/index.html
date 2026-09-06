@@ -645,6 +645,25 @@ One quiet hour beats five panicked evenings.</div>
       </div>
 
       <div class="block">
+        <div class="block-title">Success criteria</div>
+        <div class="card">
+          <ol class="trust-list">
+            <li>Forward or paste a source → it is stored.</li>
+            <li>Generate (or ingest) → a Post with status ready, source_id, draft_text, model, prompt_version.</li>
+            <li>Inbox shows sources and Draft ready.</li>
+            <li>Review is Source | Draft. No Verified badge.</li>
+            <li>Approve freezes the exact draft_text. Frozen posts cannot be edited.</li>
+            <li>Publish sends frozen_text only. Nothing live without Approve.</li>
+            <li>Provider: XAI_API_KEY, else OPENAI_API_KEY, else deterministic cleaner. Temperature 0.</li>
+            <li>initData HMAC on every Mini App mutation. Bot ingest uses INGEST_KEY.</li>
+            <li>SQLite on the Railway volume (/app/data). JSON imported once.</li>
+            <li>Same Railway service. WEBAPP_URL / BOT_TOKEN / INGEST_KEY unchanged.</li>
+            <li>Stars billing remains desk30.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="block">
         <div class="block-title">Channel</div>
         <div class="card">
           <div class="row">
