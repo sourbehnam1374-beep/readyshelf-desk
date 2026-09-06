@@ -6,11 +6,13 @@ import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
 import crypto from "node:crypto";
 import fsSync from "node:fs";
+import { openStore } from "./lib/db.js";
 import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
 import { TRUST_VERSION, resolvePublishText, isLocked, freezePost, SUCCESS_CRITERIA } from "./lib/trust.js";
 import { POSITIONING } from "./lib/copy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const repoRoot = path.resolve(__dirname, "../..");
 const publicDir = path.resolve(__dirname, "public");
 const DATA_DIR =
