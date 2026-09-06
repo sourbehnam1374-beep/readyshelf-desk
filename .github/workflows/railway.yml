@@ -1,0 +1,33 @@
+# Deploy to the existing Railway service. Skips if RAILWAY_TOKEN is not set.
+# Does not write WEBAPP_URL / BOT_TOKEN / INGEST_KEY.
+name: Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Deploy existing service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN not set — GitHub→Railway auto-deploy should pick up this push."
+            echo "Keep WEBAPP_URL, BOT_TOKEN, INGEST_KEY on the existing service."
+            exit 0
+          fi
+          npm i -g @railway/cli
+          if [ -n "$RAILWAY_SERVICE" ]; then
+            railway up --ci --service "$RAILWAY_SERVICE"
+          else
+            railway up --ci --service readyshelf-desk
+          fi

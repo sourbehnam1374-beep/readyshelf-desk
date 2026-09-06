@@ -1,0 +1,11 @@
+# Existing service `readyshelf-desk`.
+# Do not set WEBAPP_URL / BOT_TOKEN / INGEST_KEY here — keep Railway env as-is.
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "node index.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 45
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

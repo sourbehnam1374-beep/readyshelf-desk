@@ -85,6 +85,20 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 - `ALLOW_MOCK_KEY` must stay **off** in production.
 - `GET /api/health` stays public.
 
+## Deploy
+
+Existing Railway service **`readyshelf-desk`** · URL stays `https://desk-production-537d.up.railway.app`.
+
+**Keep these env vars as they are. Do not rotate or overwrite:**
+
+- `WEBAPP_URL`
+- `BOT_TOKEN`
+- `INGEST_KEY`
+
+Optional (do not remove if set): `CHANNEL_ID`, `XAI_API_KEY` / `OPENAI_API_KEY`, `DRAFT_MODEL`. `ALLOW_MOCK_KEY` stays off. Volume stays `/app/data`.
+
+Push to `main` deploys that service (GitHub integration or `RAILWAY_TOKEN` Action). `railway.toml` does not define secrets.
+
 ## Run
 
 ```
