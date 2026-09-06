@@ -614,7 +614,7 @@ One quiet hour beats five panicked evenings.</div>
             <li>Never fabricate medical or news facts.</li>
             <li>Approve freezes the exact draft text. Publish sends that string — no rewrite.</li>
             <li>Frozen or published posts cannot be edited or regenerated.</li>
-            <li>Nothing goes to the channel until Approve.</li>
+            <li>Nothing publishes without Approve of frozen text.</li>
             <li>Operator auth is Telegram initData HMAC. Mock key stays off in production.</li>
           </ol>
         </div>
@@ -1645,6 +1645,10 @@ One quiet hour beats five panicked evenings.</div>
       toast("<strong>Empty draft</strong> · nothing to publish");
       return;
     }
+    if (!review.postId) {
+      toast("<strong>Blocked</strong> · nothing publishes without Approve of frozen text");
+      return;
+    }
 
     var scheduledAt = review.whenIso;
     var btn = document.getElementById("btn-approve");
@@ -1664,6 +1668,7 @@ One quiet hour beats five panicked evenings.</div>
       .then(function () {
         return apiPost("/api/publish", {
           text: frozenText,
+          postId: review.postId || null,
           scheduledAt: scheduledAt
         });
       })
@@ -1691,7 +1696,8 @@ One quiet hour beats five panicked evenings.</div>
           live: true,
           link: link,
           messageId: pubRes && pubRes.message_id ? pubRes.message_id : null,
-          frozenText: frozenText
+          frozenText: frozenText,
+          postId: review.postId || null
         };
         queue.unshift(item);
         saveJSON(LS_QUEUE, queue);
@@ -1828,24 +1834,14 @@ One quiet hour beats five panicked evenings.</div>
     var pub = queue.find(function (p) { return p.id === id; });
 
     if (action === "publish" && pub) {
-      var textToSend = String(pub.frozenText || pub.snippet || pub.title || "").trim();
+      var textToSend = String(pub.frozenText || "").trim();
       if (!textToSend) {
-        toast("<strong>Publish failed</strong> · empty text");
+        toast("<strong>Blocked</strong> · nothing publishes without Approve of frozen text");
         return;
       }
       btn.disabled = true;
       btn.textContent = "LIVE…";
-      apiPost("/api/approve-queue", {
-        text: textToSend,
-        frozenText: textToSend,
-        scheduledAt: pub.when,
-        time: pub.when,
-        status: "approved",
-        source: pub.id
-      })
-        .then(function () {
-          return apiPost("/api/publish", { text: textToSend, scheduledAt: pub.when });
-        })
+      apiPost("/api/publish", { text: textToSend, postId: pub.postId || null, scheduledAt: pub.when })
         .then(function (pubRes) {
           pub.section = "sent";
           pub.status = "LIVE";

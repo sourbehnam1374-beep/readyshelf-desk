@@ -26,10 +26,10 @@ Not “AI in your voice.” A short English channel post from the source:
 3. Never fabricate medical or news facts.
 4. Approve freezes the exact draft text. Publish sends that string — no rewrite.
 5. Frozen or published posts cannot be edited or regenerated.
-6. Nothing goes to the channel until Approve.
+6. Nothing publishes without Approve of frozen text.
 7. Operator auth is Telegram initData HMAC. Mock key stays off in production.
 
-`POST /api/publish` accepts `{ postId }` or `{ text }` **only if** `text` equals that post’s `frozen_text`. Anything else is `409`.
+`POST /api/approve-queue` requires `postId` and freezes that post’s exact text. `POST /api/publish` sends only that `frozen_text` (`postId` or matching text). Anything else is `409`.
 
 ### Provider (pluggable)
 

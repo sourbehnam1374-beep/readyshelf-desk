@@ -349,6 +349,13 @@ app.post("/api/publish", requireTelegramAuth, async (req, res) => {
 app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
   try {
     const body = req.body || {};
+    const postId = typeof body.postId === "string" ? body.postId.trim() : "";
+    if (!postId) {
+      return res.status(400).json({
+        ok: false,
+        error: "postId is required — nothing publishes without Approve of frozen text",
+      });
+    }
     const text =
       typeof body.text === "string"
         ? body.text
@@ -359,16 +366,37 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "text (frozen) is required" });
     }
 
-    const scheduledAt =
-      body.scheduledAt || body.time || body.publishAt || null;
-    const now = new Date().toISOString();
+    const posts = await readPosts();
+    const idx = posts.findIndex((p) => p.id === postId);
+    if (idx < 0) return res.status(404).json({ ok: false, error: "post not found" });
+    const post = posts[idx];
+    if (post.status === "published") {
+      return res.status(409).json({ ok: false, error: "post already published" });
+    }
+    if (post.status === "frozen") {
+      if (String(post.frozen_text || "").trim() !== text.trim()) {
+        return res.status(409).json({ ok: false, error: "post is frozen" });
+      }
+    } else {
+      const nowIso = new Date().toISOString();
+      posts[idx] = {
+        ...post,
+        status: "frozen",
+        frozen_text: text.trim(),
+        updated_at: nowIso,
+      };
+      await writePosts(posts);
+    }
 
+    const scheduledAt = body.scheduledAt || body.time || body.publishAt || null;
+    const now = new Date().toISOString();
     const item = {
       id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      text: text.trim(), // frozen approved copy
+      postId,
+      text: text.trim(),
       time: scheduledAt || now,
       scheduledAt: scheduledAt || null,
-      status: body.status || "approved",
+      status: "approved",
       createdAt: now,
       source: body.source || null,
     };
@@ -377,20 +405,7 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
     queue.push(item);
     await writeQueue(queue);
 
-    const postId = typeof body.postId === "string" ? body.postId : "";
-    if (postId) {
-      const posts = await readPosts();
-      const nowIso = new Date().toISOString();
-      await writePosts(
-        posts.map((p) =>
-          p.id === postId
-            ? { ...p, status: "frozen", frozen_text: text.trim(), updated_at: nowIso }
-            : p
-        )
-      );
-    }
-
-    return res.json({ ok: true, item, count: queue.length });
+    return res.json({ ok: true, item, count: queue.length, frozen_text: text.trim() });
   } catch (err) {
     return res.status(500).json({
       ok: false,
