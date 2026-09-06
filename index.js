@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
+import crypto from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
@@ -24,23 +25,117 @@ const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
 const MOCK_KEY = "dev";
+const ALLOW_MOCK_KEY = process.env.ALLOW_MOCK_KEY === "1";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "256kb" }));
 app.use(express.static(publicDir));
 
-function requireMockKey(req, res, next) {
-  // TODO: replace with Telegram WebApp initData HMAC validation
-  // (validate initData signature with BOT_TOKEN; reject expired auth_date)
-  const key = req.get("X-ReadyShelf-Mock-Key");
-  if (key !== MOCK_KEY) {
+/**
+ * Validate Telegram Mini App initData (HMAC-SHA256).
+ * Official algorithm: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+ * Never log initData or botToken.
+ */
+function validateTelegramWebAppData(initData, botToken, maxAgeSec = 86400) {
+  if (!initData || typeof initData !== "string" || !botToken) {
+    return { ok: false, error: "missing initData or bot token" };
+  }
+
+  let params;
+  try {
+    params = new URLSearchParams(initData);
+  } catch {
+    return { ok: false, error: "invalid initData" };
+  }
+
+  const hash = params.get("hash");
+  if (!hash) return { ok: false, error: "missing hash" };
+
+  const pairs = [];
+  for (const [key, value] of params.entries()) {
+    if (key === "hash") continue;
+    pairs.push(`${key}=${value}`);
+  }
+  pairs.sort();
+  const dataCheckString = pairs.join("\n");
+
+  const secretKey = crypto
+    .createHmac("sha256", "WebAppData")
+    .update(botToken)
+    .digest();
+  const calculated = crypto
+    .createHmac("sha256", secretKey)
+    .update(dataCheckString)
+    .digest("hex");
+
+  let hashBuf;
+  let calcBuf;
+  try {
+    hashBuf = Buffer.from(hash, "hex");
+    calcBuf = Buffer.from(calculated, "hex");
+  } catch {
+    return { ok: false, error: "invalid hash encoding" };
+  }
+  if (hashBuf.length !== calcBuf.length || !crypto.timingSafeEqual(hashBuf, calcBuf)) {
+    return { ok: false, error: "bad signature" };
+  }
+
+  const authDateRaw = params.get("auth_date");
+  const authDate = Number(authDateRaw);
+  if (!Number.isFinite(authDate) || authDate <= 0) {
+    return { ok: false, error: "missing auth_date" };
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (nowSec - authDate > maxAgeSec) {
+    return { ok: false, error: "initData expired" };
+  }
+  if (authDate > nowSec + 60) {
+    return { ok: false, error: "auth_date in the future" };
+  }
+
+  let user = null;
+  const userRaw = params.get("user");
+  if (userRaw) {
+    try {
+      user = JSON.parse(userRaw);
+    } catch {
+      return { ok: false, error: "invalid user JSON" };
+    }
+  }
+
+  return { ok: true, user, authDate, params };
+}
+
+function requireTelegramAuth(req, res, next) {
+  const initData = req.get("X-Telegram-Init-Data") || "";
+
+  if (initData && BOT_TOKEN) {
+    const result = validateTelegramWebAppData(initData, BOT_TOKEN);
+    if (result.ok) {
+      req.tgUser = result.user || null;
+      return next();
+    }
     return res.status(401).json({
       ok: false,
-      error: "Unauthorized — missing or invalid X-ReadyShelf-Mock-Key",
+      error: "Unauthorized — invalid Telegram initData",
     });
   }
-  next();
+
+  if (ALLOW_MOCK_KEY) {
+    const key = req.get("X-ReadyShelf-Mock-Key");
+    if (key === MOCK_KEY) {
+      req.tgUser = { id: 0, username: "mock", first_name: "Mock" };
+      return next();
+    }
+  }
+
+  return res.status(401).json({
+    ok: false,
+    error: ALLOW_MOCK_KEY
+      ? "Unauthorized — missing Telegram initData or mock key"
+      : "Unauthorized — open Desk from @ReadyShelfShopBot",
+  });
 }
 
 function getBot() {
@@ -89,7 +184,19 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.post("/api/publish", requireMockKey, async (req, res) => {
+app.get("/api/me", requireTelegramAuth, (req, res) => {
+  const u = req.tgUser || {};
+  return res.json({
+    ok: true,
+    user: {
+      id: u.id,
+      username: u.username,
+      first_name: u.first_name,
+    },
+  });
+});
+
+app.post("/api/publish", requireTelegramAuth, async (req, res) => {
   try {
     const { text, scheduledAt } = req.body || {};
     if (!text || typeof text !== "string" || !text.trim()) {
@@ -119,7 +226,7 @@ app.post("/api/publish", requireMockKey, async (req, res) => {
   }
 });
 
-app.post("/api/approve-queue", requireMockKey, async (req, res) => {
+app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
   try {
     const body = req.body || {};
     const text =
