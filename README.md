@@ -145,6 +145,19 @@ Optional (do not remove if set): `CHANNEL_ID`, `XAI_API_KEY` / `OPENAI_API_KEY`,
 
 Push to `main` deploys that service (GitHub integration or `RAILWAY_TOKEN` Action). `railway.toml` does not define secrets.
 
+## Reference
+
+| | |
+|---|---|
+| Live | https://desk-production-537d.up.railway.app |
+| GitHub | https://github.com/sourbehnam1374-beep/readyshelf-desk |
+| Railway | `readyshelf-desk` (existing service) |
+| Bot | [@ReadyShelfShopBot](https://t.me/ReadyShelfShopBot) |
+| Channel | [@readyshelf](https://t.me/readyshelf) |
+| SKU | `desk30` · ⭐500 / 30 days |
+| Volume | `/app/data` · `readyshelf.sqlite` |
+| Keep env | `WEBAPP_URL` · `BOT_TOKEN` · `INGEST_KEY` |
+
 ## Run
 
 ```
