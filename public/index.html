@@ -461,6 +461,20 @@ footer{
 .card.preparing{opacity:.7;pointer-events:none}
 .card.preparing .btn.primary{opacity:.65}
 
+@media(min-width:860px){
+  .app{ --maxw:860px; }
+  .review-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  .review-split > .card{margin-bottom:18px}
+}
+.paste-area{
+  width:100%;min-height:88px;resize:vertical;
+  background:rgba(7,11,20,.55);color:var(--ink);border:1px solid var(--line);
+  border-radius:12px;padding:11px 12px;font:inherit;line-height:1.5;outline:none;
+}
+.paste-area:focus{border-color:rgba(125,211,252,.4);box-shadow:0 0 0 3px rgba(125,211,252,.08)}
+.diff-hint{font-size:11px;color:var(--faint);font-family:var(--mono);margin:8px 0 0;letter-spacing:.02em}
+
+
 @media (prefers-reduced-motion: reduce){
   :root{--tab-ms:1ms}
   .panel.active,.panel.leaving{animation:none!important;opacity:1;transform:none}
@@ -496,7 +510,16 @@ footer{
     <section class="panel active" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
       <div class="page-hd">
         <h1>Inbox</h1>
-        <p>Sources ready for your approval.</p>
+        <p>Sources in. Draft Engine writes a clean post. You freeze the exact text.</p>
+      </div>
+
+      <div class="card" id="paste-card">
+        <div class="section-label">Paste a source</div>
+        <textarea class="paste-area" id="paste-source" maxlength="8000" placeholder="Forwarded message, note, or raw tip…" aria-label="Paste source text"></textarea>
+        <div class="btn-row" style="margin-top:10px">
+          <button type="button" class="btn primary" id="btn-ingest-generate">Ingest & generate</button>
+          <button type="button" class="btn ghost" id="btn-ingest-save">Save only</button>
+        </div>
       </div>
       <div class="filters" role="group" aria-label="Filter sources">
         <button type="button" class="chip" data-filter="new" aria-pressed="true">New</button>
@@ -510,14 +533,16 @@ footer{
     <section class="panel" id="panel-review" role="tabpanel" aria-labelledby="tab-review" hidden>
       <div class="page-hd">
         <h1>Review</h1>
-        <p>Approve freezes this version, queues it, then publishes <strong>LIVE</strong> to Telegram.</p>
+        <p>Left is the source. Right is the draft. Approve freezes <strong>exact</strong> draft text, then publishes LIVE.</p>
       </div>
 
+      <div class="review-split">
       <div class="card" id="rev-source-card">
         <div class="section-label">Source</div>
         <h2 class="item-title" id="rev-source-title" style="font-size:14.5px">Forwarded tip · Batching posts</h2>
         <p class="item-meta"><span id="rev-source-from">from @readyshelf</span><span class="dot">·</span><span id="rev-source-when">Fri, 5 Sep 2026</span></p>
         <blockquote class="quote" id="rev-source-body" style="margin-top:10px">“Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.”</blockquote>
+        <p class="diff-hint">Unedited forward · facts only from here</p>
       </div>
 
       <div class="card" id="rev-draft-card">
@@ -540,8 +565,10 @@ One quiet hour beats five panicked evenings.</div>
         <div class="btn-row">
           <button type="button" class="btn ghost" id="btn-edit">Edit</button>
           <button type="button" class="btn ghost" id="btn-shorter">Shorter</button>
+          <button type="button" class="btn ghost" id="btn-regen">Regenerate</button>
           <button type="button" class="btn ghost" id="btn-reject" style="color:var(--rose)">Reject</button>
         </div>
+      </div>
       </div>
     </section>
 
@@ -608,6 +635,22 @@ One quiet hour beats five panicked evenings.</div>
         </div>
       </div>
 
+
+      <div class="block">
+        <div class="block-title">Draft Engine</div>
+        <div class="card">
+          <div class="row kv">
+            <div>
+              <div class="label">Provider</div>
+              <div class="desc">XAI_API_KEY (Grok) then OPENAI_API_KEY, else cleaner</div>
+            </div>
+            <div class="val" id="engine-provider">draft-engine/v1</div>
+          </div>
+          <p style="margin:8px 0 0;font-size:13px;color:var(--dim);line-height:1.5">
+            Approve freezes exact draft_text. Publish sends that string — the model never gets a second pass.
+          </p>
+        </div>
+      </div>
       <div class="block">
         <div class="block-title">House style</div>
         <div class="card">
@@ -747,6 +790,37 @@ One quiet hour beats five panicked evenings.</div>
     });
   }
 
+
+  function apiPatch(path, body) {
+    var initData = getInitData();
+    if (!initData && !MOCK_MODE) {
+      toast("Desk must open from <strong>@ReadyShelfShopBot</strong>");
+      return Promise.reject(new Error("Open Desk from @ReadyShelfShopBot"));
+    }
+    var headers = {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData || ""
+    };
+    if (!initData && MOCK_MODE) {
+      headers["X-ReadyShelf-Mock-Key"] = MOCK_KEY;
+    }
+    return fetch(apiUrl(path), {
+      method: "PATCH",
+      headers: headers,
+      body: JSON.stringify(body || {})
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        if (!res.ok || !data || !data.ok) {
+          var msg = (data && data.error) || ("HTTP " + res.status);
+          var err = new Error(msg);
+          err.status = res.status;
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
 
   function apiGet(path) {
     var initData = getInitData();
@@ -1179,10 +1253,47 @@ One quiet hour beats five panicked evenings.</div>
         renderInbox();
       })
       .then(function () {
+        return loadRemotePosts();
+      })
+      .then(function () {
         remoteSourcesLoading = false;
       }, function () {
         remoteSourcesLoading = false;
       });
+  }
+
+  function loadRemotePosts() {
+    return apiGet("/api/posts?status=draft,ready,frozen")
+      .then(function (data) {
+        var list = (data && data.posts) || [];
+        if (!list.length) return;
+        list.forEach(function (post) {
+          var src = inbox.find(function (s) { return s.id === post.source_id; });
+          if (!src) {
+            src = {
+              id: post.source_id,
+              group: post.status === "ready" ? "ready" : "drafting",
+              title: "Draft · " + String(post.draft_text || "").split(/\n/)[0].slice(0, 64),
+              from: "Desk",
+              when: formatSourceWhen(post.created_at),
+              body: "",
+              availability: "Available",
+              isSample: false
+            };
+            inbox.unshift(src);
+          }
+          src.group = post.status === "frozen" ? "ready" : (post.status === "ready" ? "ready" : "drafting");
+          src.postId = post.id;
+          src.draftText = post.draft_text;
+          src.model = post.model;
+          src.promptVersion = post.prompt_version;
+          src.warning = post.warning || "";
+          src.isSample = false;
+        });
+        saveJSON(LS_INBOX, inbox);
+        renderInbox();
+      })
+      .catch(function () { /* ignore */ });
   }
 
   /* —— Inbox —— */
@@ -1204,13 +1315,13 @@ One quiet hour beats five panicked evenings.</div>
   function primaryLabel(group) {
     if (group === "drafting") return "Continue";
     if (group === "ready") return "Open review";
-    return "Prepare post";
+    return "Generate draft";
   }
 
   function statusChip(group, isSample) {
     var bits = [];
     if (isSample) bits.push('<span class="status draft">Sample</span>');
-    if (group === "ready") bits.push('<span class="status ready">Ready</span>');
+    if (group === "ready") bits.push('<span class="status ready">Draft ready</span>');
     else if (group === "drafting") bits.push('<span class="status draft">Draft</span>');
     return bits.join("");
   }
@@ -1291,39 +1402,15 @@ One quiet hour beats five panicked evenings.</div>
     var action = btn.getAttribute("data-action");
 
     if (action === "prepare" && src) {
-      if (src.group === "new") {
-        article.classList.add("preparing");
-        btn.disabled = true;
-        btn.textContent = "Preparing…";
-        src.group = "drafting";
-        saveJSON(LS_INBOX, inbox);
-
-        setTimeout(function () {
-          src.group = "ready";
-          saveJSON(LS_INBOX, inbox);
-          loadSourceIntoReview(src);
-          selectedSourceId = src.id;
-          try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e2) { /* ignore */ }
-          inboxFilter = "ready";
-          try { localStorage.setItem(LS_FILTER, inboxFilter); } catch (e3) { /* ignore */ }
-          reward("<strong>Draft ready</strong> · +1 to Review");
-          switchTab("review");
-        }, reduceMotion ? 0 : 420);
-      } else if (src.group === "drafting") {
-        src.group = "ready";
-        saveJSON(LS_INBOX, inbox);
-        loadSourceIntoReview(src);
-        selectedSourceId = src.id;
-        try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e4) { /* ignore */ }
-        reward("<strong>Draft ready</strong> · +1 to Review");
-        switchTab("review");
-      } else {
-        loadSourceIntoReview(src);
+      if (src.group === "ready" && src.postId) {
+        loadPostIntoReview(src);
         selectedSourceId = src.id;
         try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e5) { /* ignore */ }
         switchTab("review");
         toast("<strong>Opened</strong> · ready for approve");
+        return;
       }
+      generateDraftFromSource(src, article, btn);
     }
   });
 
@@ -1336,18 +1423,89 @@ One quiet hour beats five panicked evenings.</div>
 
   function loadSourceIntoReview(src) {
     review.sourceId = src.id;
+    review.postId = src.postId || null;
     review.sourceTitle = src.title;
     review.sourceFrom = "from " + src.from;
     review.sourceWhen = src.when;
-    review.sourceBody = "“" + src.body + "”";
+    review.sourceBody = src.body;
     review.preview =
-      tipTitleFromSource(src) +
-      "\n\n" + src.body +
-      "\n\n— ReadyShelf";
+      (src.draftText && String(src.draftText).trim())
+        ? src.draftText
+        : (tipTitleFromSource(src) + "\n\n" + src.body + "\n\n— ReadyShelf");
     review.frozen = false;
-    review.version = "v1";
+    review.version = src.promptVersion || src.model || "draft-engine/v1";
     saveJSON(LS_REVIEW, review);
     renderReview();
+  }
+
+  function loadPostIntoReview(src) {
+    loadSourceIntoReview(src);
+  }
+
+  function applyGeneratedPost(src, post) {
+    if (!src || !post) return;
+    src.group = "ready";
+    src.postId = post.id;
+    src.draftText = post.draft_text;
+    src.model = post.model;
+    src.promptVersion = post.prompt_version;
+    src.warning = post.warning || "";
+    src.isSample = false;
+    saveJSON(LS_INBOX, inbox);
+    loadSourceIntoReview(src);
+    selectedSourceId = src.id;
+    try { localStorage.setItem(LS_SELECTED, selectedSourceId); } catch (e2) { /* ignore */ }
+    inboxFilter = "ready";
+    try { localStorage.setItem(LS_FILTER, inboxFilter); } catch (e3) { /* ignore */ }
+  }
+
+  function generateDraftFromSource(src, article, btn) {
+    if (!src) return Promise.resolve();
+    if (src.isSample && src.id && src.id.indexOf("src") === 0 && src.id.length < 8) {
+      /* Sample rows are local-only — ingest first so the server has a sourceId */
+      return apiPost("/api/sources/manual", { text: src.body || src.title || "" })
+        .then(function (data) {
+          var created = data && data.source;
+          if (!created) throw new Error("ingest failed");
+          src.id = created.id;
+          src.isSample = false;
+          src.group = "drafting";
+          saveJSON(LS_INBOX, inbox);
+          return generateDraftFromSource(src, article, btn);
+        })
+        .catch(function (err) {
+          toast("<strong>Generate failed</strong> · " + escapeHtml((err && err.message) || "error"));
+        });
+    }
+    if (article) article.classList.add("preparing");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Generating…";
+    }
+    src.group = "drafting";
+    saveJSON(LS_INBOX, inbox);
+    renderInbox();
+    toast("<strong>Draft Engine</strong> · writing…");
+    return apiPost("/api/drafts/generate", { sourceId: src.id })
+      .then(function (data) {
+        var post = data.post || { id: data.postId, draft_text: data.draft_text };
+        applyGeneratedPost(src, post);
+        reward("<strong>Draft ready</strong> · Source | Draft");
+        switchTab("review");
+      })
+      .catch(function (err) {
+        src.group = "new";
+        saveJSON(LS_INBOX, inbox);
+        renderInbox();
+        toast("<strong>Generate failed</strong> · " + escapeHtml((err && err.message) || "error"));
+      })
+      .then(function () {
+        if (article) article.classList.remove("preparing");
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = primaryLabel(src.group);
+        }
+      });
   }
 
   /* —— Review —— */
@@ -1361,7 +1519,7 @@ One quiet hour beats five panicked evenings.</div>
     document.getElementById("rev-preview-body").textContent = review.preview;
     document.getElementById("rev-when").textContent = review.whenLabel;
     document.getElementById("rev-version-foot").textContent =
-      (review.version || "v1") + (review.frozen ? " · frozen" : " · freezes on approve");
+      (review.version || "draft-engine/v1") + (review.frozen ? " · frozen" : " · freezes on approve");
     document.getElementById("btn-approve").textContent = review.frozen
       ? "Already queued"
       : "Approve & queue · " + review.channel + " · 10:30";
@@ -1395,6 +1553,9 @@ One quiet hour beats five panicked evenings.</div>
       saveJSON(LS_REVIEW, review);
       editEl.classList.remove("show");
       renderReview();
+      if (review.postId) {
+        apiPatch("/api/posts/" + review.postId, { draft_text: review.preview }).catch(function () {});
+      }
       reward("<strong>Saved</strong> · preview updated");
     }
   });
@@ -1412,6 +1573,24 @@ One quiet hour beats five panicked evenings.</div>
     renderReview();
     reward("<strong>Shorter</strong> · trimmed draft");
   });
+
+  var regenBtn = document.getElementById("btn-regen");
+  if (regenBtn) {
+    regenBtn.addEventListener("click", function () {
+      if (review.frozen) return;
+      var src = inbox.find(function (s) { return s.id === review.sourceId; });
+      if (!src) {
+        toast("<strong>No source</strong> · pick one from Inbox");
+        return;
+      }
+      regenBtn.disabled = true;
+      regenBtn.textContent = "Generating…";
+      generateDraftFromSource(src, null, regenBtn).then(function () {
+        regenBtn.disabled = false;
+        regenBtn.textContent = "Regenerate";
+      });
+    });
+  }
 
   document.getElementById("btn-reject").addEventListener("click", function () {
     if (review.frozen) return;
@@ -1461,7 +1640,8 @@ One quiet hour beats five panicked evenings.</div>
       scheduledAt: scheduledAt,
       time: scheduledAt,
       status: "approved",
-      source: review.sourceId || null
+      source: review.sourceId || null,
+      postId: review.postId || null
     })
       .then(function () {
         return apiPost("/api/publish", {
@@ -1725,6 +1905,75 @@ One quiet hour beats five panicked evenings.</div>
   document.getElementById("btn-disconnect").addEventListener("click", function () {
     toast("<strong>Disconnect</strong> · disabled in demo");
   });
+
+  function pasteText() {
+    var el = document.getElementById("paste-source");
+    return el ? String(el.value || "").trim() : "";
+  }
+  function clearPaste() {
+    var el = document.getElementById("paste-source");
+    if (el) el.value = "";
+  }
+  var ingestGen = document.getElementById("btn-ingest-generate");
+  if (ingestGen) {
+    ingestGen.addEventListener("click", function () {
+      var text = pasteText();
+      if (!text) {
+        toast("<strong>Empty</strong> · paste a source first");
+        return;
+      }
+      ingestGen.disabled = true;
+      ingestGen.textContent = "Ingesting…";
+      apiPost("/api/sources/manual", { text: text })
+        .then(function (data) {
+          var created = data && data.source;
+          if (!created) throw new Error("ingest failed");
+          var mapped = mapServerSource(created);
+          inbox = [mapped].concat(inbox.filter(function (s) { return s.id !== mapped.id; }));
+          saveJSON(LS_INBOX, inbox);
+          clearPaste();
+          return generateDraftFromSource(mapped, null, ingestGen);
+        })
+        .catch(function (err) {
+          toast("<strong>Ingest failed</strong> · " + escapeHtml((err && err.message) || "error"));
+        })
+        .then(function () {
+          ingestGen.disabled = false;
+          ingestGen.textContent = "Ingest & generate";
+        });
+    });
+  }
+  var ingestSave = document.getElementById("btn-ingest-save");
+  if (ingestSave) {
+    ingestSave.addEventListener("click", function () {
+      var text = pasteText();
+      if (!text) {
+        toast("<strong>Empty</strong> · paste a source first");
+        return;
+      }
+      apiPost("/api/sources/manual", { text: text })
+        .then(function (data) {
+          var created = data && data.source;
+          if (!created) throw new Error("ingest failed");
+          inbox = [mapServerSource(created)].concat(inbox);
+          saveJSON(LS_INBOX, inbox);
+          clearPaste();
+          inboxFilter = "new";
+          renderInbox();
+          reward("<strong>Source saved</strong> · New");
+        })
+        .catch(function (err) {
+          toast("<strong>Ingest failed</strong> · " + escapeHtml((err && err.message) || "error"));
+        });
+    });
+  }
+
+  fetch(apiUrl("/api/health")).then(function (res) { return res.json(); }).then(function (data) {
+    var el = document.getElementById("engine-provider");
+    if (el && data && data.draft) {
+      el.textContent = data.draft.provider + " · " + data.draft.model;
+    }
+  }).catch(function () { /* ignore */ });
 
   try {
     if (window.Telegram && window.Telegram.WebApp) {
