@@ -11,7 +11,7 @@ Bot: [@ReadyShelfShopBot](https://t.me/ReadyShelfShopBot) · Channel: [@readyshe
 
 Forward a source → get a clean draft → Approve freezes exact text → it posts to the channel.
 
-An approval inbox with an assisted draft. Not “AI in your voice.” Not a fact-checker. Not auto-post. One operator. One channel. desk30 · ⭐500 / 30 days.
+An approval inbox with an assisted draft. Not “AI writes your channel.” Not “AI in your voice.” Not a fact-checker. Not auto-post. One operator. One channel. desk30 · ⭐500 / 30 days.
 
 ## Draft Engine v1
 
