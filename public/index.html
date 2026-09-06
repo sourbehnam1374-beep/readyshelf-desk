@@ -513,7 +513,7 @@ footer{
     <section class="panel active" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
       <div class="page-hd">
         <h1>Inbox</h1>
-        <p>Sources in. Draft Engine writes a clean post. You freeze the exact text.</p>
+        <p>Sources in. Draft generates automatically — or one tap — into Review.</p>
       </div>
 
       <div class="card" id="paste-card">
@@ -649,7 +649,7 @@ One quiet hour beats five panicked evenings.</div>
         <div class="card">
           <ol class="trust-list">
             <li>Forward or paste a source → it is stored.</li>
-            <li>Generate (or ingest) → a Post with status ready, source_id, draft_text, model, prompt_version.</li>
+            <li>Generate (or ingest) → a Post with status ready, source_id, draft_text, model, prompt_version. Draft opens in Review automatically, or in one tap.</li>
             <li>Inbox shows sources and Draft ready.</li>
             <li>Review is Source | Draft. No Verified badge.</li>
             <li>Approve freezes the exact draft_text. Frozen posts cannot be edited.</li>
@@ -1366,8 +1366,36 @@ One quiet hour beats five panicked evenings.</div>
         });
         saveJSON(LS_INBOX, inbox);
         renderInbox();
+        autoOpenFreshDraft(list);
       })
       .catch(function () { /* ignore */ });
+  }
+
+  var openedFreshDraft = {};
+  function autoOpenFreshDraft(posts) {
+    if (review.frozen || editing) return;
+    var now = Date.now();
+    var fresh = (posts || [])
+      .filter(function (p) {
+        if (!p || p.status !== "ready" || !p.id || openedFreshDraft[p.id]) return false;
+        var t = Date.parse(p.updated_at || p.created_at || "") || 0;
+        return t && now - t < 90000;
+      })
+      .sort(function (a, b) {
+        return String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || ""));
+      });
+    var post = fresh[0];
+    if (!post) return;
+    var src = inbox.find(function (s) { return s.id === post.source_id || s.postId === post.id; });
+    if (!src) return;
+    openedFreshDraft[post.id] = true;
+    loadSourceIntoReview(src);
+    if (currentTab === "inbox") {
+      switchTab("review");
+      toast("<strong>Draft ready</strong> · Source | Draft");
+    } else if (currentTab === "review") {
+      renderReview();
+    }
   }
 
   /* —— Inbox —— */

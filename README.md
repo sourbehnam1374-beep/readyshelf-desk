@@ -93,7 +93,7 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 ## Success criteria
 
 1. Forward or paste a source → it is stored.
-2. Generate (or ingest) → a Post with status ready, `source_id`, `draft_text`, `model`, `prompt_version`.
+2. Generate (or ingest) → a Post with status ready, `source_id`, `draft_text`, `model`, `prompt_version`. Draft opens in Review automatically, or in one tap.
 3. Inbox shows sources and Draft ready.
 4. Review is Source | Draft. No Verified badge.
 5. Approve freezes the exact `draft_text`. Frozen posts cannot be edited.
