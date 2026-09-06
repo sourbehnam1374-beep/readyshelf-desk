@@ -479,7 +479,7 @@ footer{
   <header class="topbar">
     <div class="brandrow">
       <p class="name">ReadyShelf</p>
-      <span class="mock-chip live-hint" title="UI is mock; Approve publishes LIVE to Telegram via local server">Mock · LIVE publish</span>
+      <span class="mock-chip live-hint" id="desk-chip" title="Approve publishes LIVE to Telegram">Desk · LIVE publish</span>
       <span class="xp-chip" id="xp-chip" title="Local demo actions">Desk · 0 actions</span>
     </div>
     <nav class="tabs" role="tablist" aria-label="ReadyShelf sections">
@@ -666,6 +666,7 @@ One quiet hour beats five panicked evenings.</div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="confetti-layer" aria-hidden="true"></div>
 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 (function () {
   "use strict";
@@ -685,28 +686,52 @@ One quiet hour beats five panicked evenings.</div>
     reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch (e) { reduceMotion = false; }
 
-  /* Live local publish API (secrets stay on the server only) */
+  /* Live publish API — Telegram initData HMAC on the server (never log secrets) */
   var MOCK_KEY = "dev";
+  var MOCK_MODE = (function () {
+    try {
+      if (/(?:^|[?&])mock=1(?:&|$)/.test(location.search || "")) return true;
+      if (localStorage.getItem("readyshelf_allow_mock") === "1") return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  })();
   var API_BASE = (function () {
     try {
       if (location.protocol === "file:") return "http://localhost:8787";
-      if (String(location.port) === "8787") return "";
-      if (/^https?:$/i.test(location.protocol) && /^(localhost|127\.0\.0\.1)$/i.test(location.hostname) && String(location.port) === "8787") return "";
+      // Same-origin when served by ReadyShelf (local :8787 or deployed host)
+      if (/^https?:$/i.test(location.protocol)) return "";
     } catch (e) { /* ignore */ }
     return "http://localhost:8787";
   })();
+
+  function getInitData() {
+    try {
+      return (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || "";
+    } catch (e) {
+      return "";
+    }
+  }
 
   function apiUrl(path) {
     return (API_BASE || "") + path;
   }
 
   function apiPost(path, body) {
+    var initData = getInitData();
+    if (!initData && !MOCK_MODE) {
+      toast("Desk must open from <strong>@ReadyShelfShopBot</strong>");
+      return Promise.reject(new Error("Open Desk from @ReadyShelfShopBot"));
+    }
+    var headers = {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData || ""
+    };
+    if (!initData && MOCK_MODE) {
+      headers["X-ReadyShelf-Mock-Key"] = MOCK_KEY;
+    }
     return fetch(apiUrl(path), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-ReadyShelf-Mock-Key": MOCK_KEY
-      },
+      headers: headers,
       body: JSON.stringify(body || {})
     }).then(function (res) {
       return res.json().catch(function () { return null; }).then(function (data) {
@@ -1585,6 +1610,13 @@ One quiet hour beats five panicked evenings.</div>
   document.getElementById("btn-disconnect").addEventListener("click", function () {
     toast("<strong>Disconnect</strong> · disabled in demo");
   });
+
+  try {
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
+  } catch (e) { /* ignore */ }
 
   /* Init panels that may already be visible */
   renderInbox();
