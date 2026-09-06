@@ -28,7 +28,7 @@ if (!process.env.BOT_TOKEN && priorToken) process.env.BOT_TOKEN = priorToken;
 const PORT = Number(process.env.PORT) || 8787;
 const STARS_SKU = "desk30";
 const STARS_AMOUNT = 500;
-const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
+const WEBAPP_URL = process.env.WEBAPP_URL || "https://desk-production-537d.up.railway.app";
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
 const MOCK_KEY = "dev";
