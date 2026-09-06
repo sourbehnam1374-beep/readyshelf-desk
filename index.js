@@ -1,5 +1,4 @@
 import path from "node:path";
-import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
@@ -9,6 +8,7 @@ import crypto from "node:crypto";
 import fsSync from "node:fs";
 import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
 import { TRUST_VERSION, resolvePublishText, isLocked } from "./lib/trust.js";
+import { openStore } from "./lib/db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
@@ -16,9 +16,7 @@ const publicDir = path.resolve(__dirname, "public");
 const DATA_DIR =
   process.env.DATA_DIR ||
   (fsSync.existsSync("/app/data") ? "/app/data" : path.join(__dirname, "data"));
-const queuePath = path.join(DATA_DIR, "queue.json");
-const sourcesPath = path.join(DATA_DIR, "sources.json");
-const postsPath = path.join(DATA_DIR, "posts.json");
+const store = openStore(DATA_DIR);
 
 // Load bot/.env first, then local server/.env. Never log token values.
 // Empty BOT_TOKEN in server/.env must NOT wipe a real token from bot/.env.
@@ -168,51 +166,27 @@ function channelMessageLink(channelId, messageId) {
 }
 
 async function readQueue() {
-  try {
-    const raw = await fs.readFile(queuePath, "utf8");
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    if (err && err.code === "ENOENT") return [];
-    throw err;
-  }
+  return store.readQueue();
 }
 
 async function writeQueue(items) {
-  await fs.mkdir(path.dirname(queuePath), { recursive: true });
-  await fs.writeFile(queuePath, JSON.stringify(items, null, 2) + "\n", "utf8");
+  return store.writeQueue(items);
 }
 
 async function readSources() {
-  try {
-    const raw = await fs.readFile(sourcesPath, "utf8");
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    if (err && err.code === "ENOENT") return [];
-    throw err;
-  }
+  return store.readSources();
 }
 
 async function writeSources(items) {
-  await fs.mkdir(path.dirname(sourcesPath), { recursive: true });
-  await fs.writeFile(sourcesPath, JSON.stringify(items, null, 2) + "\n", "utf8");
+  return store.writeSources(items);
 }
 
 async function readPosts() {
-  try {
-    const raw = await fs.readFile(postsPath, "utf8");
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    if (err && err.code === "ENOENT") return [];
-    throw err;
-  }
+  return store.readPosts();
 }
 
 async function writePosts(items) {
-  await fs.mkdir(path.dirname(postsPath), { recursive: true });
-  await fs.writeFile(postsPath, JSON.stringify(items, null, 2) + "\n", "utf8");
+  return store.writePosts(items);
 }
 
 function newId(prefix) {
@@ -315,6 +289,7 @@ app.get("/api/health", (_req, res) => {
       mock: ALLOW_MOCK_KEY,
       ingest: Boolean(INGEST_KEY),
     },
+    persist: { driver: "sqlite", volume: DATA_DIR },
   });
 });
 
@@ -579,6 +554,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`Token configured: ${BOT_TOKEN ? "yes" : "no"}`);
   const p = pickProvider();
   console.log(`Draft Engine: ${p.name} · ${p.model} · ${PROMPT_VERSION}`);
-  console.log(`Data dir: ${DATA_DIR}`);
+  console.log(`Data dir: ${DATA_DIR} · sqlite`);
 });
 

@@ -46,7 +46,7 @@ Optional:
 
 - `DRAFT_MODEL` — override model id
 - `DRAFT_ON_INGEST` — `1` (default) generates in the background after `POST /api/sources`. Set `0` to generate only when the operator taps **Generate draft**.
-- `DATA_DIR` — JSON store. Defaults to `/app/data` when that directory exists (Railway volume), else `./data`.
+- `DATA_DIR` — SQLite file `readyshelf.sqlite` (WAL). Defaults to `/app/data` when that directory exists (Railway volume), else `./data`. Existing `sources.json` / `posts.json` / `queue.json` are imported once, then left as backup.
 
 ### API
 
