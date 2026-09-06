@@ -85,6 +85,18 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 - `ALLOW_MOCK_KEY` must stay **off** in production.
 - `GET /api/health` stays public.
 
+## Must NOT ship
+
+- “AI in your voice” / style cloning / personality theater
+- Fake Verified or fact-check stamps
+- Auto-publish without Approve of frozen text
+- Invented claims, especially medical or news facts
+- Mock auth in production (`ALLOW_MOCK_KEY`, `?mock=1`) — forced off on Railway prod
+- Logging `BOT_TOKEN`, `INGEST_KEY`, or `initData`
+- Rewrite of frozen text at publish
+- A new Railway service, or rotating `WEBAPP_URL` / `BOT_TOKEN` / `INGEST_KEY`
+- Rebuild from zero
+
 ## Deploy
 
 Existing Railway service **`readyshelf-desk`** · URL stays `https://desk-production-537d.up.railway.app`.

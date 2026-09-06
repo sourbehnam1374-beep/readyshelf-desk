@@ -31,7 +31,10 @@ const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
 const MOCK_KEY = "dev";
-const ALLOW_MOCK_KEY = process.env.ALLOW_MOCK_KEY === "1";
+const IS_PROD =
+  String(process.env.RAILWAY_ENVIRONMENT || "").toLowerCase().includes("prod") ||
+  String(process.env.WEBAPP_URL || "").includes("desk-production-");
+const ALLOW_MOCK_KEY = process.env.ALLOW_MOCK_KEY === "1" && !IS_PROD;
 const INGEST_KEY = process.env.INGEST_KEY || "";
 
 const app = express();

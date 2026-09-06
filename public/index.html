@@ -622,6 +622,23 @@ One quiet hour beats five panicked evenings.</div>
       </div>
 
       <div class="block">
+        <div class="block-title">Must not ship</div>
+        <div class="card">
+          <ol class="trust-list">
+            <li>“AI in your voice” / style cloning / personality theater</li>
+            <li>Fake Verified or fact-check stamps</li>
+            <li>Auto-publish without Approve of frozen text</li>
+            <li>Invented claims, especially medical or news facts</li>
+            <li>Mock auth in production (ALLOW_MOCK_KEY, ?mock=1)</li>
+            <li>Logging BOT_TOKEN, INGEST_KEY, or initData</li>
+            <li>Rewrite of frozen text at publish</li>
+            <li>A new Railway service, or rotating WEBAPP_URL / BOT_TOKEN / INGEST_KEY</li>
+            <li>Rebuild from zero</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="block">
         <div class="block-title">Channel</div>
         <div class="card">
           <div class="row">
@@ -759,6 +776,8 @@ One quiet hour beats five panicked evenings.</div>
   var MOCK_KEY = "dev";
   var MOCK_MODE = (function () {
     try {
+      var host = (location.hostname || "").toLowerCase();
+      if (host.indexOf("desk-production-") !== -1 || host.indexOf("railway.app") !== -1) return false;
       if (/(?:^|[?&])mock=1(?:&|$)/.test(location.search || "")) return true;
       if (localStorage.getItem("readyshelf_allow_mock") === "1") return true;
     } catch (e) { /* ignore */ }
