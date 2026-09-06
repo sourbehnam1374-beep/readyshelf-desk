@@ -32,6 +32,7 @@ const STARS_SKU = "desk30";
 const STARS_AMOUNT = 500;
 const WEBAPP_URL = process.env.WEBAPP_URL || "https://desk-production-537d.up.railway.app";
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
+const CHANNEL_ID = process.env.CHANNEL_ID || "@readyshelf";
 
 const MOCK_KEY = "dev";
 const IS_PROD =
