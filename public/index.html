@@ -747,6 +747,36 @@ One quiet hour beats five panicked evenings.</div>
     });
   }
 
+
+  function apiGet(path) {
+    var initData = getInitData();
+    if (!initData && !MOCK_MODE) {
+      toast("Desk must open from <strong>@ReadyShelfShopBot</strong>");
+      return Promise.reject(new Error("Open Desk from @ReadyShelfShopBot"));
+    }
+    var headers = {
+      "X-Telegram-Init-Data": initData || ""
+    };
+    if (!initData && MOCK_MODE) {
+      headers["X-ReadyShelf-Mock-Key"] = MOCK_KEY;
+    }
+    return fetch(apiUrl(path), {
+      method: "GET",
+      headers: headers
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        if (!res.ok || !data || !data.ok) {
+          var msg = (data && data.error) || ("HTTP " + res.status);
+          var err = new Error(msg);
+          err.status = res.status;
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
   var DEFAULT_INBOX = [
     {
       id: "src1",
@@ -755,7 +785,8 @@ One quiet hour beats five panicked evenings.</div>
       from: "@readyshelf",
       when: "Fri, 5 Sep 2026",
       body: "Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.",
-      availability: "Available"
+      availability: "Available",
+      isSample: true
     },
     {
       id: "src2",
@@ -764,7 +795,8 @@ One quiet hour beats five panicked evenings.</div>
       from: "Saved message",
       when: "Thu, 4 Sep 2026",
       body: "Ask for one clear action — reply, save, or share. Multiple CTAs dilute the click.",
-      availability: "Available"
+      availability: "Available",
+      isSample: true
     },
     {
       id: "src3",
@@ -773,7 +805,8 @@ One quiet hour beats five panicked evenings.</div>
       from: "@readyshelf",
       when: "Wed, 3 Sep 2026",
       body: "Pin a short “start here” post with links to your best 3 pieces. New joiners land soft.",
-      availability: "Available"
+      availability: "Available",
+      isSample: true
     },
     {
       id: "src4",
@@ -782,7 +815,8 @@ One quiet hour beats five panicked evenings.</div>
       from: "@readyshelf",
       when: "Tue, 2 Sep 2026",
       body: "One quiet hour beats five panicked evenings. Protect a block for drafting.",
-      availability: "Available"
+      availability: "Available",
+      isSample: true
     }
   ];
 
@@ -979,7 +1013,7 @@ One quiet hour beats five panicked evenings.</div>
     opts = opts || {};
     if (!panels[name] || name === currentTab && !opts.force) {
       if (name === currentTab) {
-        if (name === "inbox") renderInbox();
+        if (name === "inbox") { renderInbox(); loadRemoteSources(); }
         if (name === "review") renderReview();
         if (name === "queue") renderQueue();
       }
@@ -1012,7 +1046,7 @@ One quiet hour beats five panicked evenings.</div>
         if (on) p.removeAttribute("hidden");
         else p.setAttribute("hidden", "");
       });
-      if (name === "inbox") renderInbox();
+      if (name === "inbox") { renderInbox(); loadRemoteSources(); }
       if (name === "review") renderReview();
       if (name === "queue") renderQueue();
       return;
@@ -1032,7 +1066,7 @@ One quiet hour beats five panicked evenings.</div>
       }
     });
 
-    if (name === "inbox") renderInbox();
+    if (name === "inbox") { renderInbox(); loadRemoteSources(); }
     if (name === "review") renderReview();
     if (name === "queue") renderQueue();
 
@@ -1072,6 +1106,85 @@ One quiet hour beats five panicked evenings.</div>
     switchTab(start, { force: true });
   })();
 
+
+  var usingRemoteSources = false;
+  var remoteSourcesLoading = false;
+
+  function formatSourceWhen(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return iso || "";
+      return d.toLocaleDateString(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      });
+    } catch (e) {
+      return iso || "";
+    }
+  }
+
+  function mapServerSource(s) {
+    var text = (s && s.text) || "";
+    var firstLine = text.split(/\r?\n/).filter(Boolean)[0] || "Source";
+    if (firstLine.length > 72) firstLine = firstLine.slice(0, 69) + "…";
+    var from = s.fromUsername
+      ? ("@" + s.fromUsername)
+      : (s.fromUserId ? ("user " + s.fromUserId) : "Telegram");
+    var title = s.forwardedFrom
+      ? ("Forwarded · " + firstLine)
+      : ("Source · " + firstLine);
+    var status = (s.status || "new").toLowerCase();
+    var group = status === "drafting" || status === "ready" ? status : "new";
+    return {
+      id: s.id,
+      group: group,
+      title: title,
+      from: from,
+      when: formatSourceWhen(s.createdAt),
+      body: text,
+      availability: "Available",
+      isSample: false,
+      forwardedFrom: s.forwardedFrom || null,
+      createdAt: s.createdAt || null
+    };
+  }
+
+  function sampleInboxFallback() {
+    return DEFAULT_INBOX.map(function (s) {
+      return Object.assign({}, s, { isSample: true });
+    });
+  }
+
+  function loadRemoteSources() {
+    if (remoteSourcesLoading) return;
+    remoteSourcesLoading = true;
+    apiGet("/api/sources")
+      .then(function (data) {
+        var list = (data && data.sources) || [];
+        if (list.length) {
+          inbox = list.map(mapServerSource);
+          usingRemoteSources = true;
+        } else if (!usingRemoteSources) {
+          inbox = sampleInboxFallback();
+          usingRemoteSources = false;
+        }
+        renderInbox();
+      })
+      .catch(function () {
+        if (!usingRemoteSources && (!inbox || !inbox.length)) {
+          inbox = sampleInboxFallback();
+        }
+        renderInbox();
+      })
+      .then(function () {
+        remoteSourcesLoading = false;
+      }, function () {
+        remoteSourcesLoading = false;
+      });
+  }
+
   /* —— Inbox —— */
   function syncFilterChips() {
     document.querySelectorAll(".chip[data-filter]").forEach(function (c) {
@@ -1094,10 +1207,12 @@ One quiet hour beats five panicked evenings.</div>
     return "Prepare post";
   }
 
-  function statusChip(group) {
-    if (group === "ready") return '<span class="status ready">Ready</span>';
-    if (group === "drafting") return '<span class="status draft">Draft</span>';
-    return "";
+  function statusChip(group, isSample) {
+    var bits = [];
+    if (isSample) bits.push('<span class="status draft">Sample</span>');
+    if (group === "ready") bits.push('<span class="status ready">Ready</span>');
+    else if (group === "drafting") bits.push('<span class="status draft">Draft</span>');
+    return bits.join("");
   }
 
   function emptyCta(filter) {
@@ -1145,7 +1260,7 @@ One quiet hour beats five panicked evenings.</div>
       var sel = selectedSourceId === s.id ? " selected" : "";
       return (
         '<article class="card pressable' + sel + '" data-id="' + escapeHtml(s.id) + '">' +
-          "<h2 class=\"item-title\">" + escapeHtml(s.title) + statusChip(s.group) + "</h2>" +
+          "<h2 class=\"item-title\">" + escapeHtml(s.title) + statusChip(s.group, s.isSample) + "</h2>" +
           '<p class="item-meta">' + escapeHtml(s.from) + '<span class="dot">·</span>' + escapeHtml(s.when) + "</p>" +
           '<div class="item-actions">' +
             '<button type="button" class="btn primary" data-action="prepare">' + primaryLabel(s.group) + "</button>" +
@@ -1620,6 +1735,7 @@ One quiet hour beats five panicked evenings.</div>
 
   /* Init panels that may already be visible */
   renderInbox();
+  loadRemoteSources();
   renderReview();
   renderQueue();
 })();
