@@ -7,7 +7,7 @@ import TelegramBot from "node-telegram-bot-api";
 import crypto from "node:crypto";
 import fsSync from "node:fs";
 import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
-import { TRUST_VERSION, resolvePublishText, isLocked, SUCCESS_CRITERIA } from "./lib/trust.js";
+import { TRUST_VERSION, resolvePublishText, isLocked, freezePost, SUCCESS_CRITERIA } from "./lib/trust.js";
 import { openStore } from "./lib/db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -492,19 +492,12 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
     if (post.status === "published") {
       return res.status(409).json({ ok: false, error: "post already published" });
     }
-    if (post.status === "frozen") {
-      if (String(post.frozen_text || "").trim() !== text.trim()) {
-        return res.status(409).json({ ok: false, error: "post is frozen" });
-      }
-    } else {
-      const nowIso = new Date().toISOString();
-      posts[idx] = {
-        ...post,
-        status: "frozen",
-        frozen_text: text.trim(),
-        updated_at: nowIso,
-      };
+    try {
+      const frozen = freezePost(post, text);
+      posts[idx] = { ...frozen, updated_at: new Date().toISOString() };
       await writePosts(posts);
+    } catch (err) {
+      return res.status(err.status || 409).json({ ok: false, error: err.message });
     }
 
     const scheduledAt = body.scheduledAt || body.time || body.publishAt || null;

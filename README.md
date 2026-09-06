@@ -97,6 +97,7 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 3. Inbox shows sources and Draft ready.
 4. Review is Source | Draft. No Verified badge.
 5. Operator edits → Approve → live post on `@readyshelf` with a t.me link.
+6. Do this 3 times with zero unapproved publishes.
 7. Provider: `XAI_API_KEY`, else `OPENAI_API_KEY`, else deterministic cleaner. Temperature 0.
 8. initData HMAC on every Mini App mutation. Bot ingest uses `INGEST_KEY`.
 9. SQLite on the Railway volume (`/app/data`). JSON imported once.
