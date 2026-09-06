@@ -11,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
 const publicDir = path.resolve(__dirname, "public");
 const queuePath = path.join(__dirname, "data", "queue.json");
+const sourcesPath = path.join(__dirname, "data", "sources.json");
 
 // Load bot/.env first, then local server/.env. Never log token values.
 // Empty BOT_TOKEN in server/.env must NOT wipe a real token from bot/.env.
@@ -26,6 +27,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
 const MOCK_KEY = "dev";
 const ALLOW_MOCK_KEY = process.env.ALLOW_MOCK_KEY === "1";
+const INGEST_KEY = process.env.INGEST_KEY || "";
 
 const app = express();
 app.use(cors());
@@ -174,6 +176,36 @@ async function writeQueue(items) {
   await fs.writeFile(queuePath, JSON.stringify(items, null, 2) + "\n", "utf8");
 }
 
+async function readSources() {
+  try {
+    const raw = await fs.readFile(sourcesPath, "utf8");
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    if (err && err.code === "ENOENT") return [];
+    throw err;
+  }
+}
+
+async function writeSources(items) {
+  await fs.mkdir(path.dirname(sourcesPath), { recursive: true });
+  await fs.writeFile(sourcesPath, JSON.stringify(items, null, 2) + "\n", "utf8");
+}
+
+function requireIngestKey(req, res, next) {
+  if (!INGEST_KEY) {
+    return res.status(503).json({ ok: false, error: "INGEST_KEY is not configured" });
+  }
+  const key = req.get("X-ReadyShelf-Ingest-Key") || "";
+  const a = Buffer.from(String(key));
+  const b = Buffer.from(String(INGEST_KEY));
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized — bad ingest key" });
+  }
+  return next();
+}
+
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -262,6 +294,54 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: err.message || "approve-queue failed",
+    });
+  }
+});
+
+app.post("/api/sources", requireIngestKey, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) {
+      return res.status(400).json({ ok: false, error: "text is required" });
+    }
+
+    const now = new Date().toISOString();
+    const source = {
+      id: `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      fromUserId: body.fromUserId ?? null,
+      fromUsername: body.fromUsername ?? null,
+      messageId: body.messageId ?? null,
+      forwardedFrom: body.forwardedFrom ?? null,
+      status: "new",
+      createdAt: now,
+    };
+
+    const sources = await readSources();
+    sources.push(source);
+    await writeSources(sources);
+
+    return res.json({ ok: true, source, count: sources.length });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: err.message || "ingest failed",
+    });
+  }
+});
+
+app.get("/api/sources", requireTelegramAuth, async (req, res) => {
+  try {
+    const sources = await readSources();
+    const newest = sources
+      .slice()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    return res.json({ ok: true, sources: newest });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: err.message || "list sources failed",
     });
   }
 });
