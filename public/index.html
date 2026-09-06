@@ -340,6 +340,9 @@ main{
   margin:10px 0 0;font-size:12px;color:var(--dim);line-height:1.45;
 }
 .warn-compact span{color:var(--warn);margin-right:4px}
+.trust-list{margin:0;padding:2px 0 0 18px;color:var(--dim);font-size:13px;line-height:1.55}
+.trust-list li{margin:0 0 8px}
+.trust-list li:last-child{margin:0}
 .slot-line{
   margin-top:12px;font-size:12.5px;color:var(--dim);
 }
@@ -599,7 +602,22 @@ One quiet hour beats five panicked evenings.</div>
     <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
       <div class="page-hd">
         <h1>Settings</h1>
-        <p>One channel · one approver</p>
+        <p>One channel · one approver · Draft Engine v1.1</p>
+      </div>
+
+      <div class="block">
+        <div class="block-title">Trust rules · trust/v1</div>
+        <div class="card">
+          <ol class="trust-list">
+            <li>Source is the only evidence. Draft may omit junk; it may not add facts.</li>
+            <li>If unsure, keep closer to the source.</li>
+            <li>Never fabricate medical or news facts.</li>
+            <li>Approve freezes the exact draft text. Publish sends that string — no rewrite.</li>
+            <li>Frozen or published posts cannot be edited or regenerated.</li>
+            <li>Nothing goes to the channel until Approve.</li>
+            <li>Operator auth is Telegram initData HMAC. Mock key stays off in production.</li>
+          </ol>
+        </div>
       </div>
 
       <div class="block">

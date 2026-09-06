@@ -17,6 +17,20 @@ Not “AI in your voice.” A short English channel post from the source:
 - **Never invent claims**
 - Approve freezes `draft_text` exactly — publish sends that string
 
+## Trust rules (do not break)
+
+`trust/v1` — enforced on publish and on frozen posts.
+
+1. Source is the only evidence. Draft may omit junk; it may not add facts.
+2. If unsure, keep closer to the source.
+3. Never fabricate medical or news facts.
+4. Approve freezes the exact draft text. Publish sends that string — no rewrite.
+5. Frozen or published posts cannot be edited or regenerated.
+6. Nothing goes to the channel until Approve.
+7. Operator auth is Telegram initData HMAC. Mock key stays off in production.
+
+`POST /api/publish` accepts `{ postId }` or `{ text }` **only if** `text` equals that post’s `frozen_text`. Anything else is `409`.
+
 ### Provider (pluggable)
 
 First key wins:
@@ -61,7 +75,7 @@ POST /api/publish                 { text }                 LIVE to CHANNEL_ID
 GET  /api/health                  public, includes draft.provider
 ```
 
-Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine/v1`), `created_at`, `status`.
+Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine/v1.1`), `created_at`, `status`.
 
 ## Auth
 

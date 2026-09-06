@@ -8,6 +8,7 @@ import TelegramBot from "node-telegram-bot-api";
 import crypto from "node:crypto";
 import fsSync from "node:fs";
 import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
+import { TRUST_VERSION, resolvePublishText, isLocked } from "./lib/trust.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
@@ -297,6 +298,7 @@ app.get("/api/health", (_req, res) => {
       const p = pickProvider();
       return { provider: p.name, model: p.model, prompt_version: PROMPT_VERSION };
     })(),
+    trust: { version: TRUST_VERSION },
   });
 });
 
@@ -314,25 +316,27 @@ app.get("/api/me", requireTelegramAuth, (req, res) => {
 
 app.post("/api/publish", requireTelegramAuth, async (req, res) => {
   try {
-    const { text, scheduledAt } = req.body || {};
-    if (!text || typeof text !== "string" || !text.trim()) {
-      return res.status(400).json({ ok: false, error: "text is required" });
-    }
-
-    // scheduledAt reserved for a real scheduler; v1 publishes immediately
-    if (scheduledAt) {
-      // acknowledged but not deferred yet
-    }
+    const body = req.body || {};
+    const posts = await readPosts();
+    const { text, post } = resolvePublishText(posts, body);
 
     const bot = getBot();
-    const msg = await bot.sendMessage(CHANNEL_ID, text.trim(), {
+    const msg = await bot.sendMessage(CHANNEL_ID, text, {
       disable_web_page_preview: false,
     });
 
     const message_id = msg?.message_id;
     const link = channelMessageLink(CHANNEL_ID, message_id);
+    const now = new Date().toISOString();
+    await writePosts(
+      posts.map((p) =>
+        p.id === post.id
+          ? { ...p, status: "published", published_at: now, link, updated_at: now }
+          : p,
+      ),
+    );
 
-    return res.json({ ok: true, message_id, link });
+    return res.json({ ok: true, message_id, link, postId: post.id, text });
   } catch (err) {
     const status = err.status || 500;
     return res.status(status).json({
@@ -518,7 +522,7 @@ app.patch("/api/posts/:id", requireTelegramAuth, async (req, res) => {
     const idx = posts.findIndex((p) => p.id === id);
     if (idx < 0) return res.status(404).json({ ok: false, error: "post not found" });
     const post = posts[idx];
-    if (post.status === "frozen" || post.status === "published") {
+    if (isLocked(post)) {
       return res.status(409).json({ ok: false, error: "post is frozen" });
     }
     if (typeof body.draft_text === "string") {
