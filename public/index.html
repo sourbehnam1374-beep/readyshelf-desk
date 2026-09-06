@@ -545,7 +545,7 @@ footer{
         <h2 class="item-title" id="rev-source-title" style="font-size:14.5px">Forwarded tip · Batching posts</h2>
         <p class="item-meta"><span id="rev-source-from">from @readyshelf</span><span class="dot">·</span><span id="rev-source-when">Fri, 5 Sep 2026</span></p>
         <blockquote class="quote" id="rev-source-body" style="margin-top:10px">“Draft 3–5 posts on Sunday. Queue them once. Your weekday self will thank you.”</blockquote>
-        <p class="diff-hint">Unedited forward · facts only from here</p>
+        <p class="diff-hint">Unedited source · not verified</p>
       </div>
 
       <div class="card" id="rev-draft-card">
@@ -559,7 +559,7 @@ One quiet hour beats five panicked evenings.</div>
         </div>
         <textarea class="edit-area" id="rev-edit" maxlength="2000" aria-label="Edit post draft"></textarea>
         <p class="draft-foot" id="rev-version-foot">v1 · freezes on approve</p>
-        <p class="warn-compact" id="rev-warnings"><span>!</span> Link preview may expand · text-only (OK)</p>
+        <p class="warn-compact" id="rev-warnings"><span>!</span> Not verified — compare source and draft</p>
         <p class="slot-line"><strong id="rev-when">Sun, 7 Sep 2026 · 10:30</strong> · Asia/Tehran</p>
 
         <div class="btn-row" style="margin-top:14px">
@@ -615,6 +615,7 @@ One quiet hour beats five panicked evenings.</div>
             <li>Approve freezes the exact draft text. Publish sends that string — no rewrite.</li>
             <li>Frozen or published posts cannot be edited or regenerated.</li>
             <li>Nothing publishes without Approve of frozen text.</li>
+            <li>Review shows source + draft. Never show a Verified badge — the engine does not fact-check.</li>
             <li>Operator auth is Telegram initData HMAC. Mock key stays off in production.</li>
           </ol>
         </div>

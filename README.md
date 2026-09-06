@@ -28,6 +28,7 @@ Not “AI in your voice.” A short English channel post from the source:
 5. Frozen or published posts cannot be edited or regenerated.
 6. Nothing publishes without Approve of frozen text.
 7. Operator auth is Telegram initData HMAC. Mock key stays off in production.
+8. Review shows source + draft. Never show a Verified badge — the engine does not fact-check.
 
 `POST /api/approve-queue` requires `postId` and freezes that post’s exact text. `POST /api/publish` sends only that `frozen_text` (`postId` or matching text). Anything else is `409`.
 
