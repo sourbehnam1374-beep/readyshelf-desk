@@ -96,6 +96,12 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 - Rewrite of frozen text at publish
 - A new Railway service, or rotating `WEBAPP_URL` / `BOT_TOKEN` / `INGEST_KEY`
 - Rebuild from zero
+- Audience Gates
+- Multi-agent roster
+- AI voice clone
+- Module marketplace
+- RSS network
+- Reinventing Stars billing (already `desk30`)
 
 ## Deploy
 

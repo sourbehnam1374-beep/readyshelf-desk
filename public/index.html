@@ -634,6 +634,12 @@ One quiet hour beats five panicked evenings.</div>
             <li>Rewrite of frozen text at publish</li>
             <li>A new Railway service, or rotating WEBAPP_URL / BOT_TOKEN / INGEST_KEY</li>
             <li>Rebuild from zero</li>
+            <li>Audience Gates</li>
+            <li>Multi-agent roster</li>
+            <li>AI voice clone</li>
+            <li>Module marketplace</li>
+            <li>RSS network</li>
+            <li>Reinventing Stars billing (already desk30)</li>
           </ol>
         </div>
       </div>
@@ -698,7 +704,7 @@ One quiet hour beats five panicked evenings.</div>
         <div class="block-title">House style</div>
         <div class="card">
           <p style="margin:0;font-size:13px;color:var(--dim);line-height:1.5">
-            Short tips, one idea per post, dry tone. Rules land in the Mini App later.
+            Short tips, one idea per post, dry tone. Not “AI in your voice.”
           </p>
         </div>
       </div>
@@ -706,12 +712,8 @@ One quiet hour beats five panicked evenings.</div>
       <div class="block">
         <div class="block-title">Plan</div>
         <div class="card plan-card">
-          <p class="plan-line">⭐ 500 <span>/ 30 days</span></p>
-          <p class="plan-desc">Approval inbox + queue for one channel.</p>
-          <div class="btn-row" style="margin:0">
-            <button type="button" class="btn primary" id="btn-try-free">Try free</button>
-            <button type="button" class="btn ghost" id="btn-keep-desk">Keep desk</button>
-          </div>
+          <p class="plan-line">desk30 <span>⭐ 500 / 30 days</span></p>
+          <p class="plan-desc">Telegram Stars on @ReadyShelfShopBot. Existing SKU — not a new billing system.</p>
         </div>
       </div>
 
@@ -742,7 +744,7 @@ One quiet hour beats five panicked evenings.</div>
         </div>
       </div>
 
-      <p class="later">Later: audience monetization / Gates — not in v1.</p>
+      
     </section>
   </main>
 
@@ -1918,12 +1920,6 @@ One quiet hour beats five panicked evenings.</div>
   });
 
   /* —— Settings —— */
-  document.getElementById("btn-try-free").addEventListener("click", function () {
-    reward("<strong>Desk unlocked</strong> (mock)");
-  });
-  document.getElementById("btn-keep-desk").addEventListener("click", function () {
-    reward("<strong>Desk unlocked</strong> (mock)");
-  });
   document.getElementById("btn-support").addEventListener("click", function () {
     toast("<strong>Support</strong> · @ReadyShelfShopBot later");
   });
