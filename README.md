@@ -27,7 +27,7 @@ Not “AI in your voice.” A short English channel post from the source:
 4. Approve freezes the exact draft text. Publish sends that string — no rewrite.
 5. Frozen or published posts cannot be edited or regenerated.
 6. Nothing publishes without Approve of frozen text.
-7. Operator auth is Telegram initData HMAC. Mock key stays off in production.
+7. initData HMAC on all Mini App mutations. Bot ingest uses INGEST_KEY only. Mock key stays off in production.
 8. Review shows source + draft. Never show a Verified badge — the engine does not fact-check.
 
 `POST /api/approve-queue` requires `postId` and freezes that post’s exact text. `POST /api/publish` sends only that `frozen_text` (`postId` or matching text). Anything else is `409`.
@@ -80,7 +80,10 @@ Post record: `source_id`, `draft_text`, `model`, `prompt_version` (`draft-engine
 
 ## Auth
 
-- Mini App HMAC as before. `ALLOW_MOCK_KEY` must stay **off** in production.
+- **initData HMAC on all Mini App mutations** (`X-Telegram-Init-Data`). Catch-all middleware — a new POST/PATCH/PUT/DELETE cannot skip it.
+- Bot ingest `POST /api/sources` uses `X-ReadyShelf-Ingest-Key` only.
+- `ALLOW_MOCK_KEY` must stay **off** in production.
+- `GET /api/health` stays public.
 
 ## Run
 

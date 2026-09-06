@@ -286,6 +286,17 @@ function requireIngestKey(req, res, next) {
   return next();
 }
 
+/** initData HMAC on all Mini App mutations. Bot ingest is the only exception. */
+function requireInitDataOnMutations(req, res, next) {
+  if (!req.path.startsWith("/api")) return next();
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
+  if (method === "POST" && req.path === "/api/sources") return next();
+  return requireTelegramAuth(req, res, next);
+}
+
+app.use(requireInitDataOnMutations);
+
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -299,6 +310,11 @@ app.get("/api/health", (_req, res) => {
       return { provider: p.name, model: p.model, prompt_version: PROMPT_VERSION };
     })(),
     trust: { version: TRUST_VERSION },
+    auth: {
+      initDataMutations: true,
+      mock: ALLOW_MOCK_KEY,
+      ingest: Boolean(INGEST_KEY),
+    },
   });
 });
 

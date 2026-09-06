@@ -616,7 +616,7 @@ One quiet hour beats five panicked evenings.</div>
             <li>Frozen or published posts cannot be edited or regenerated.</li>
             <li>Nothing publishes without Approve of frozen text.</li>
             <li>Review shows source + draft. Never show a Verified badge — the engine does not fact-check.</li>
-            <li>Operator auth is Telegram initData HMAC. Mock key stays off in production.</li>
+            <li>initData HMAC on all Mini App mutations. Bot ingest uses INGEST_KEY only. Mock key stays off in production.</li>
           </ol>
         </div>
       </div>
