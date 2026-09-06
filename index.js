@@ -6,12 +6,18 @@ import cors from "cors";
 import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
 import crypto from "node:crypto";
+import fsSync from "node:fs";
+import { generateDraftText, pickProvider, PROMPT_VERSION } from "./lib/draft-engine.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
 const publicDir = path.resolve(__dirname, "public");
-const queuePath = path.join(__dirname, "data", "queue.json");
-const sourcesPath = path.join(__dirname, "data", "sources.json");
+const DATA_DIR =
+  process.env.DATA_DIR ||
+  (fsSync.existsSync("/app/data") ? "/app/data" : path.join(__dirname, "data"));
+const queuePath = path.join(DATA_DIR, "queue.json");
+const sourcesPath = path.join(DATA_DIR, "sources.json");
+const postsPath = path.join(DATA_DIR, "posts.json");
 
 // Load bot/.env first, then local server/.env. Never log token values.
 // Empty BOT_TOKEN in server/.env must NOT wipe a real token from bot/.env.
@@ -192,6 +198,80 @@ async function writeSources(items) {
   await fs.writeFile(sourcesPath, JSON.stringify(items, null, 2) + "\n", "utf8");
 }
 
+async function readPosts() {
+  try {
+    const raw = await fs.readFile(postsPath, "utf8");
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    if (err && err.code === "ENOENT") return [];
+    throw err;
+  }
+}
+
+async function writePosts(items) {
+  await fs.mkdir(path.dirname(postsPath), { recursive: true });
+  await fs.writeFile(postsPath, JSON.stringify(items, null, 2) + "\n", "utf8");
+}
+
+function newId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function upsertDraftForSource(source, generated) {
+  const now = new Date().toISOString();
+  const posts = await readPosts();
+  const existing = posts.find(
+    (p) => p.source_id === source.id && p.status !== "frozen" && p.status !== "published"
+  );
+  const post = existing
+    ? {
+        ...existing,
+        draft_text: generated.draft_text,
+        status: "ready",
+        model: generated.model,
+        provider: generated.provider,
+        prompt_version: generated.prompt_version || PROMPT_VERSION,
+        warning: generated.warning || null,
+        updated_at: now,
+      }
+    : {
+        id: newId("post"),
+        source_id: source.id,
+        draft_text: generated.draft_text,
+        status: "ready",
+        model: generated.model,
+        provider: generated.provider,
+        prompt_version: generated.prompt_version || PROMPT_VERSION,
+        warning: generated.warning || null,
+        created_at: now,
+        updated_at: now,
+      };
+  const next = existing
+    ? posts.map((p) => (p.id === post.id ? post : p))
+    : [post, ...posts];
+  await writePosts(next);
+
+  const sources = await readSources();
+  const srcNext = sources.map((s) =>
+    s.id === source.id ? { ...s, status: "ready" } : s
+  );
+  await writeSources(srcNext);
+  return post;
+}
+
+async function generateForSourceId(sourceId) {
+  const sources = await readSources();
+  const source = sources.find((s) => s.id === sourceId);
+  if (!source) {
+    const err = new Error("source not found");
+    err.status = 404;
+    throw err;
+  }
+  const generated = await generateDraftText(source.text || "");
+  return upsertDraftForSource(source, generated);
+}
+
 function requireIngestKey(req, res, next) {
   if (!INGEST_KEY) {
     return res.status(503).json({ ok: false, error: "INGEST_KEY is not configured" });
@@ -213,6 +293,10 @@ app.get("/api/health", (_req, res) => {
     channel: CHANNEL_ID,
     webapp: WEBAPP_URL,
     hasToken: Boolean(BOT_TOKEN),
+    draft: (() => {
+      const p = pickProvider();
+      return { provider: p.name, model: p.model, prompt_version: PROMPT_VERSION };
+    })(),
   });
 });
 
@@ -289,6 +373,19 @@ app.post("/api/approve-queue", requireTelegramAuth, async (req, res) => {
     queue.push(item);
     await writeQueue(queue);
 
+    const postId = typeof body.postId === "string" ? body.postId : "";
+    if (postId) {
+      const posts = await readPosts();
+      const nowIso = new Date().toISOString();
+      await writePosts(
+        posts.map((p) =>
+          p.id === postId
+            ? { ...p, status: "frozen", frozen_text: text.trim(), updated_at: nowIso }
+            : p
+        )
+      );
+    }
+
     return res.json({ ok: true, item, count: queue.length });
   } catch (err) {
     return res.status(500).json({
@@ -322,6 +419,13 @@ app.post("/api/sources", requireIngestKey, async (req, res) => {
     sources.push(source);
     await writeSources(sources);
 
+    const draftOnIngest = process.env.DRAFT_ON_INGEST !== "0";
+    if (draftOnIngest) {
+      generateForSourceId(source.id).catch((err) => {
+        console.error("draft-on-ingest failed", err && err.message);
+      });
+    }
+
     return res.json({ ok: true, source, count: sources.length });
   } catch (err) {
     return res.status(500).json({
@@ -346,11 +450,100 @@ app.get("/api/sources", requireTelegramAuth, async (req, res) => {
   }
 });
 
+
+app.post("/api/sources/manual", requireTelegramAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) {
+      return res.status(400).json({ ok: false, error: "text is required" });
+    }
+    const now = new Date().toISOString();
+    const u = req.tgUser || {};
+    const source = {
+      id: newId("src"),
+      text,
+      fromUserId: u.id ?? null,
+      fromUsername: u.username ?? "desk",
+      messageId: null,
+      forwardedFrom: "Desk paste",
+      status: "new",
+      createdAt: now,
+    };
+    const sources = await readSources();
+    sources.push(source);
+    await writeSources(sources);
+    return res.json({ ok: true, source, count: sources.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || "manual ingest failed" });
+  }
+});
+
+app.post("/api/drafts/generate", requireTelegramAuth, async (req, res) => {
+  try {
+    const sourceId = req.body && req.body.sourceId;
+    if (!sourceId || typeof sourceId !== "string") {
+      return res.status(400).json({ ok: false, error: "sourceId is required" });
+    }
+    const post = await generateForSourceId(sourceId);
+    return res.json({ ok: true, postId: post.id, draft_text: post.draft_text, post });
+  } catch (err) {
+    const status = err.status || 500;
+    return res.status(status).json({ ok: false, error: err.message || "generate failed" });
+  }
+});
+
+app.get("/api/posts", requireTelegramAuth, async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : "";
+    let posts = await readPosts();
+    if (status) {
+      const allowed = status.split(",").map((s) => s.trim()).filter(Boolean);
+      posts = posts.filter((p) => allowed.includes(p.status));
+    }
+    posts = posts
+      .slice()
+      .sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")));
+    return res.json({ ok: true, posts });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || "list posts failed" });
+  }
+});
+
+app.patch("/api/posts/:id", requireTelegramAuth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body || {};
+    const posts = await readPosts();
+    const idx = posts.findIndex((p) => p.id === id);
+    if (idx < 0) return res.status(404).json({ ok: false, error: "post not found" });
+    const post = posts[idx];
+    if (post.status === "frozen" || post.status === "published") {
+      return res.status(409).json({ ok: false, error: "post is frozen" });
+    }
+    if (typeof body.draft_text === "string") {
+      post.draft_text = body.draft_text.trim();
+    }
+    if (typeof body.status === "string" && ["draft", "ready"].includes(body.status)) {
+      post.status = body.status;
+    }
+    post.updated_at = new Date().toISOString();
+    posts[idx] = post;
+    await writePosts(posts);
+    return res.json({ ok: true, post });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || "patch post failed" });
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   // Do not print BOT_TOKEN or any secret values
   console.log(`ReadyShelf server listening on http://localhost:${PORT}`);
   console.log(`Static UI: ${publicDir}`);
   console.log(`Channel: ${CHANNEL_ID}`);
   console.log(`Token configured: ${BOT_TOKEN ? "yes" : "no"}`);
+  const p = pickProvider();
+  console.log(`Draft Engine: ${p.name} · ${p.model} · ${PROMPT_VERSION}`);
+  console.log(`Data dir: ${DATA_DIR}`);
 });
 
